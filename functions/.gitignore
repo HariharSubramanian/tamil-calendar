@@ -1,0 +1,9 @@
+node_modules/
+*.local
+
+# Secrets and local config
+.env
+.env.*
+*serviceAccount*.json
+*service-account*.json
+.runtimeconfig.json
