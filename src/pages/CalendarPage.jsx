@@ -2,7 +2,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { FESTIVALS, TYPE_COLORS } from "../data/festivals";
 import { getTamilMonthName } from "../utils/tamilDate";
 import { listReminders } from "../firebase/reminders";
 import { remindersForMonth, daysUntilNext } from "../utils/reminderDates";
@@ -10,6 +9,7 @@ import SignOutButton from "../components/SignOutButton";
 
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const REM_COLOR = { bg: "#E1F5EE", dot: "#0F6E56", text: "#0F6E56" };
+const ACCENT = "#8B0000";
 
 export default function CalendarPage() {
   const { user } = useAuth();
@@ -35,18 +35,7 @@ export default function CalendarPage() {
   const label = view.toLocaleString("default", { month: "long" });
   const taMonth = getTamilMonthName(new Date(y, m, 15));
 
-  // Festivals for this month.
-  const fmap = {};
-  FESTIVALS.forEach((f) => {
-    const fd = new Date(f.date);
-    if (fd.getFullYear() === y && fd.getMonth() === m) {
-      const k = fd.getDate();
-      (fmap[k] = fmap[k] || []).push(f);
-    }
-  });
-
-  // Reminders for this month/year — recomputed when the viewed month or
-  // reminders change. Tamil dates are recalculated for THIS year (cached).
+  // Reminders for this month/year — Tamil dates recalculated per year (cached).
   const rmap = useMemo(
     () => remindersForMonth(reminders, y, m),
     [reminders, y, m],
@@ -63,7 +52,6 @@ export default function CalendarPage() {
     return best;
   }, [reminders]);
 
-  const selFests = sel ? fmap[sel] || [] : [];
   const selRems = sel ? rmap[sel] || [] : [];
 
   return (
@@ -88,7 +76,7 @@ export default function CalendarPage() {
           onClick={() => navigate("/reminders")}
           style={{
             fontSize: "13px",
-            background: "#0F6E56",
+            background: REM_COLOR.dot,
             color: "#fff",
             border: "none",
             borderRadius: "8px",
@@ -194,21 +182,13 @@ export default function CalendarPage() {
             <div key={"e" + i} />
           ))}
         {Array.from({ length: days }, (_, i) => i + 1).map((day) => {
-          const hasFest = !!fmap[day];
           const hasRem = !!rmap[day];
-          const has = hasFest || hasRem;
           const isToday =
             day === today.getDate() &&
             m === today.getMonth() &&
             y === today.getFullYear();
           const isSel = day === sel;
-          const cellBg = isSel
-            ? "#8B0000"
-            : hasFest
-              ? TYPE_COLORS[fmap[day][0].type]?.bg || "#FFF0F0"
-              : hasRem
-                ? REM_COLOR.bg
-                : "transparent";
+          const cellBg = isSel ? ACCENT : hasRem ? REM_COLOR.bg : "transparent";
           return (
             <div
               key={day}
@@ -221,7 +201,7 @@ export default function CalendarPage() {
                 textAlign: "center",
                 background: cellBg,
                 border: isToday
-                  ? "1.5px solid #8B0000"
+                  ? `1.5px solid ${ACCENT}`
                   : "1px solid transparent",
               }}
             >
@@ -229,12 +209,12 @@ export default function CalendarPage() {
                 style={{
                   fontSize: "13px",
                   fontWeight: isToday ? 600 : 400,
-                  color: isSel ? "#fff" : isToday ? "#8B0000" : "inherit",
+                  color: isSel ? "#fff" : isToday ? ACCENT : "inherit",
                 }}
               >
                 {day}
               </div>
-              {has && (
+              {hasRem && (
                 <div
                   style={{
                     display: "flex",
@@ -243,36 +223,17 @@ export default function CalendarPage() {
                     marginTop: "2px",
                   }}
                 >
-                  {hasFest &&
-                    fmap[day]
-                      .slice(0, 2)
-                      .map((f) => (
-                        <div
-                          key={f.id}
-                          style={{
-                            width: "5px",
-                            height: "5px",
-                            borderRadius: "50%",
-                            background: isSel
-                              ? "#fff"
-                              : TYPE_COLORS[f.type]?.dot || "#8B0000",
-                          }}
-                        />
-                      ))}
-                  {hasRem &&
-                    rmap[day]
-                      .slice(0, 2)
-                      .map((r) => (
-                        <div
-                          key={r.id}
-                          style={{
-                            width: "5px",
-                            height: "5px",
-                            borderRadius: "50%",
-                            background: isSel ? "#fff" : REM_COLOR.dot,
-                          }}
-                        />
-                      ))}
+                  {rmap[day].slice(0, 3).map((r) => (
+                    <div
+                      key={r.id}
+                      style={{
+                        width: "5px",
+                        height: "5px",
+                        borderRadius: "50%",
+                        background: isSel ? "#fff" : REM_COLOR.dot,
+                      }}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -286,13 +247,13 @@ export default function CalendarPage() {
           style={{
             marginTop: "14px",
             borderRadius: "12px",
-            border: "1px solid #f5c4b3",
+            border: "1px solid #cfe8df",
             overflow: "hidden",
           }}
         >
           <div
             style={{
-              background: "#8B0000",
+              background: REM_COLOR.dot,
               color: "#fff",
               padding: "10px 14px",
               fontSize: "13px",
@@ -301,27 +262,36 @@ export default function CalendarPage() {
           >
             {label} {sel}, {y}
           </div>
-          <div style={{ background: "#fff8f8", padding: "12px 14px" }}>
-            {selFests.length === 0 && selRems.length === 0 ? (
+          <div style={{ background: "#f4fbf8", padding: "12px 14px" }}>
+            {selRems.length === 0 ? (
               <p style={{ color: "#888", fontSize: "13px" }}>
-                Nothing on this day.
+                No reminders on this day.
               </p>
             ) : (
-              <>
-                {selFests.map((f) => (
-                  <div key={f.id} style={{ marginBottom: "12px" }}>
-                    <div style={{ fontWeight: 500, fontSize: "14px" }}>
-                      {f.name_en}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "15px",
-                        color: "#8B0000",
-                        marginTop: "2px",
-                      }}
-                    >
-                      {f.name_ta}
-                    </div>
+              selRems.map((r) => (
+                <div key={r.id} style={{ marginBottom: "12px" }}>
+                  <div style={{ fontWeight: 500, fontSize: "14px" }}>
+                    {r.label}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      color: REM_COLOR.text,
+                      marginTop: "2px",
+                    }}
+                  >
+                    {r.type === "tamil"
+                      ? "Star Birthday"
+                      : r.occasion === "anniversary"
+                        ? "Anniversary"
+                        : "Birthday"}
+                    {r.type === "dob" && r.year
+                      ? r.occasion === "anniversary"
+                        ? ` (${y - r.year} years)`
+                        : ` (turning ${y - r.year})`
+                      : ""}
+                  </div>
+                  {r.alertMessage && (
                     <div
                       style={{
                         fontSize: "12px",
@@ -329,69 +299,25 @@ export default function CalendarPage() {
                         marginTop: "3px",
                       }}
                     >
-                      {f.desc}
+                      {r.alertMessage}
                     </div>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        marginTop: "6px",
-                        fontSize: "10px",
-                        padding: "2px 8px",
-                        borderRadius: "20px",
-                        fontWeight: 500,
-                        background: TYPE_COLORS[f.type]?.bg || "#f0f0f0",
-                        color: TYPE_COLORS[f.type]?.dot || "#333",
-                      }}
-                    >
-                      {TYPE_COLORS[f.type]?.label || f.type}
-                    </span>
-                  </div>
-                ))}
-                {selRems.map((r) => (
-                  <div key={r.id} style={{ marginBottom: "12px" }}>
-                    <div style={{ fontWeight: 500, fontSize: "14px" }}>
-                      {r.label}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "13px",
-                        color: REM_COLOR.text,
-                        marginTop: "2px",
-                      }}
-                    >
-                      {r.type === "tamil" ? "Star Birthday" : "Birthday"}
-                      {r.type === "dob" && r.year
-                        ? ` (turning ${y - r.year})`
-                        : ""}
-                    </div>
-                    {r.alertMessage && (
-                      <div
-                        style={{
-                          fontSize: "12px",
-                          color: "#666",
-                          marginTop: "3px",
-                        }}
-                      >
-                        {r.alertMessage}
-                      </div>
-                    )}
-                    <span
-                      style={{
-                        display: "inline-block",
-                        marginTop: "6px",
-                        fontSize: "10px",
-                        padding: "2px 8px",
-                        borderRadius: "20px",
-                        fontWeight: 500,
-                        background: REM_COLOR.bg,
-                        color: REM_COLOR.text,
-                      }}
-                    >
-                      Reminder
-                    </span>
-                  </div>
-                ))}
-              </>
+                  )}
+                  <span
+                    style={{
+                      display: "inline-block",
+                      marginTop: "6px",
+                      fontSize: "10px",
+                      padding: "2px 8px",
+                      borderRadius: "20px",
+                      fontWeight: 500,
+                      background: REM_COLOR.bg,
+                      color: REM_COLOR.text,
+                    }}
+                  >
+                    Reminder
+                  </span>
+                </div>
+              ))
             )}
           </div>
         </div>

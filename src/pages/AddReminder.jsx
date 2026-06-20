@@ -1,9 +1,9 @@
 // ===========================================================================
 // src/pages/AddReminder.jsx
-// UI ONLY — add a reminder of type DOB or Tamil (star) birthday.
-//   DOB:   day + month mandatory, year optional (shows age).
-//   Tamil: Tamil month + star mandatory.
-// Stores the DEFINITION so it recurs every year forever.
+// UI ONLY — add a reminder of type DOB/Anniversary or Tamil (star) birthday.
+//   dob:   day + month mandatory, year optional. occasion = birthday | anniversary.
+//   tamil: Tamil month + star mandatory.
+// On successful save, navigates back to /calendar.
 // ===========================================================================
 
 import { useState, useEffect } from "react";
@@ -56,6 +56,7 @@ export default function AddReminder() {
   const navigate = useNavigate();
 
   const [type, setType] = useState("dob"); // "dob" | "tamil"
+  const [occasion, setOccasion] = useState("birthday"); // "birthday" | "anniversary" (dob only)
   const [label_, setLabel] = useState("");
   // DOB fields
   const [day, setDay] = useState("");
@@ -103,11 +104,14 @@ export default function AddReminder() {
       }
       payload = {
         type: "dob",
+        occasion, // "birthday" | "anniversary"
         label: label_.trim(),
         day: d,
         month: m,
         year: year ? parseInt(year, 10) : null,
-        alertMessage: alertMessage.trim() || `${label_.trim()}'s birthday!`,
+        alertMessage:
+          alertMessage.trim() ||
+          `${label_.trim()}'s ${occasion === "anniversary" ? "anniversary" : "birthday"}!`,
       };
     } else {
       if (!tamilMonth || !tamilStar) {
@@ -127,17 +131,11 @@ export default function AddReminder() {
     setSaving(true);
     try {
       await addReminder(user.uid, payload);
-      // reset
-      setLabel("");
-      setDay("");
-      setMonth("1");
-      setYear("");
-      setAlertMessage("");
-      await refresh();
+      // On success, go back to the calendar (where the new reminder shows).
+      navigate("/calendar");
     } catch (e) {
       console.error(e);
       setError("Could not save. " + e.message);
-    } finally {
       setSaving(false);
     }
   }
@@ -151,7 +149,6 @@ export default function AddReminder() {
     }
   }
 
-  // Show this year's resolved date in the saved list.
   function describeDate(r) {
     const iso = resolveReminderDate(r, new Date().getFullYear());
     if (!iso) return "";
@@ -159,6 +156,28 @@ export default function AddReminder() {
       day: "numeric",
       month: "long",
     });
+  }
+
+  function typeLabel(r) {
+    if (r.type === "tamil") {
+      return `${MONTH_TAMIL_TO_SCRIPT[r.tamilMonth] || r.tamilMonth} · ${NAK_TAMIL_TO_SCRIPT[r.tamilStar] || r.tamilStar}`;
+    }
+    return r.occasion === "anniversary" ? "Anniversary" : "Date of Birth";
+  }
+
+  function ordinal(n) {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return s[(v - 20) % 10] || s[v] || s[0];
+  }
+
+  function yearsSuffix(r) {
+    if (r.type !== "dob" || !r.year) return "";
+    const n = new Date().getFullYear() - r.year;
+    if (n < 0) return "";
+    return r.occasion === "anniversary"
+      ? ` (${n}${ordinal(n)} anniversary)`
+      : ` (turning ${n})`;
   }
 
   const typeBtn = (val, text) => (
@@ -180,6 +199,25 @@ export default function AddReminder() {
     </button>
   );
 
+  const occBtn = (val, text) => (
+    <button
+      onClick={() => setOccasion(val)}
+      style={{
+        flex: 1,
+        padding: "8px",
+        fontSize: "12.5px",
+        fontWeight: 500,
+        cursor: "pointer",
+        border: occasion === val ? "2px solid #0F6E56" : "1px solid #ddd",
+        background: occasion === val ? "#E1F5EE" : "#fff",
+        color: occasion === val ? "#0F6E56" : "#666",
+        borderRadius: "8px",
+      }}
+    >
+      {text}
+    </button>
+  );
+
   return (
     <div
       style={{
@@ -189,7 +227,7 @@ export default function AddReminder() {
         fontFamily: "Noto Sans Tamil, system-ui, sans-serif",
       }}
     >
-      {/* Header bar: Close + Sign out (consistent across pages) */}
+      {/* Header bar: Close + Sign out */}
       <div
         style={{
           display: "flex",
@@ -220,7 +258,7 @@ export default function AddReminder() {
 
       {/* Type chooser */}
       <div style={{ display: "flex", gap: "8px" }}>
-        {typeBtn("dob", "Date of Birth")}
+        {typeBtn("dob", "Date / Anniversary")}
         {typeBtn("tamil", "Tamil (Star) Birthday")}
       </div>
 
@@ -229,11 +267,17 @@ export default function AddReminder() {
         style={input}
         value={label_}
         onChange={(e) => setLabel(e.target.value)}
-        placeholder="e.g. Amma"
+        placeholder={type === "dob" ? "e.g. Amma / Wedding Day" : "e.g. Amma"}
       />
 
       {type === "dob" ? (
         <>
+          <label style={label}>Occasion</label>
+          <div style={{ display: "flex", gap: "8px" }}>
+            {occBtn("birthday", "🎂 Birthday")}
+            {occBtn("anniversary", "💍 Anniversary")}
+          </div>
+
           <label style={label}>Day & Month (required)</label>
           <div style={{ display: "flex", gap: "8px" }}>
             <input
@@ -257,13 +301,18 @@ export default function AddReminder() {
               ))}
             </select>
           </div>
-          <label style={label}>Birth Year (optional — shows age)</label>
+
+          <label style={label}>
+            {occasion === "anniversary"
+              ? "Year of the event (optional — shows Nth anniversary)"
+              : "Birth Year (optional — shows age)"}
+          </label>
           <input
             style={input}
             type="number"
             value={year}
             onChange={(e) => setYear(e.target.value)}
-            placeholder="e.g. 1990"
+            placeholder={occasion === "anniversary" ? "e.g. 2010" : "e.g. 1990"}
           />
         </>
       ) : (
@@ -362,17 +411,13 @@ export default function AddReminder() {
               <div
                 style={{ fontSize: "13px", color: "#8B0000", marginTop: "2px" }}
               >
-                {r.type === "tamil"
-                  ? `${MONTH_TAMIL_TO_SCRIPT[r.tamilMonth] || r.tamilMonth} · ${NAK_TAMIL_TO_SCRIPT[r.tamilStar] || r.tamilStar}`
-                  : "Date of Birth"}
+                {typeLabel(r)}
               </div>
               <div
                 style={{ fontSize: "12px", color: "#666", marginTop: "3px" }}
               >
                 This year: {describeDate(r)}
-                {r.type === "dob" && r.year
-                  ? ` (turning ${new Date().getFullYear() - r.year})`
-                  : ""}
+                {yearsSuffix(r)}
               </div>
             </div>
             <button
