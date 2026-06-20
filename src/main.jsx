@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import CalendarPage from "./pages/CalendarPage";
+import AddReminder from "./pages/AddReminder";
 import "./index.css";
 
 function PrivateRoute({ children }) {
@@ -24,6 +25,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <CalendarPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/reminders"
+        element={
+          <PrivateRoute>
+            <AddReminder />
           </PrivateRoute>
         }
       />
