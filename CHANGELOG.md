@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [1.3.0] — 2026-06-21
+
+### Changed
+
+- Renamed the app to நினைவூட்டல்கள் (Ninaivootal); updated manifest name, short name, and page title
+- Updated the PWA theme colour to the new blue (#3B82C4), matching the app's palette
+- Fixed manifest and icon paths to load correctly from the site root
+
+### Added
+
+- One-time notice for users with the app already installed, explaining how to refresh the home-screen name (auto-hides after the migration window)
+
 ## [1.2.0] — 2026-06-21
 
 ### Added

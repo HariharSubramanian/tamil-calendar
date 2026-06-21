@@ -1,14 +1,23 @@
 // ===========================================================================
-// src/components/RenameNotice.jsx  — TEST MODE
-// Currently shows a TEST banner to confirm installed-PWA detection works.
-// Browser-tab visitors should NOT see it; only the installed (home-screen) app.
-// Once detection is confirmed, replace the test text with the real rename notice.
+// src/components/RenameNotice.jsx
+// Shows a one-time banner ONLY to users running the installed (home-screen) PWA,
+// telling them the app was renamed and how to refresh the name (remove + re-add).
+// Browser-tab visitors never see it. Dismissed permanently once closed.
+//
+// TEMPORARY: only useful for users who installed BEFORE the rename.
+// Plan to remove this component (and its <RenameNotice/> usage) a few weeks out.
 // ===========================================================================
 
 import { useState, useEffect } from "react";
 import { COLORS } from "../theme/colors";
 
-const DISMISS_KEY = "pwa-test-banner-dismissed-v1";
+const APP_NAME = "நினைவூட்டல்கள் (Ninaivootal)";
+const DISMISS_KEY = "rename-notice-dismissed-v1";
+
+// Stop showing the notice after this date — by then existing users have
+// had time to re-add, and new installs already have the correct name.
+// Set this to ~3-4 weeks after you deploy the rename.
+const SHOW_UNTIL = new Date("2026-07-31T23:59:59");
 
 function isInstalledPWA() {
   const standalone =
@@ -28,16 +37,17 @@ export default function RenameNotice() {
     try {
       dismissed = localStorage.getItem(DISMISS_KEY) === "1";
     } catch {
-      dismissed = true;
+      dismissed = true; // localStorage unavailable — just don't show
     }
-    if (isInstalledPWA() && !dismissed) setShow(true);
+    if (isInstalledPWA() && !dismissed && new Date() < SHOW_UNTIL)
+      setShow(true);
   }, []);
 
   function dismiss() {
     try {
       localStorage.setItem(DISMISS_KEY, "1");
     } catch {
-      /* ignore */
+      /* ignore — worst case it shows again next launch */
     }
     setShow(false);
   }
@@ -61,15 +71,26 @@ export default function RenameNotice() {
           flex: 1,
           fontSize: "12.5px",
           color: COLORS.navy,
-          lineHeight: 1.45,
+          lineHeight: 1.5,
         }}
       >
-        ✅ <strong>Test banner:</strong> you’re viewing the installed app (PWA
-        standalone mode). If you only see this in the home-screen app and NOT in
-        a browser tab, detection works.
+        This app is now called <strong>{APP_NAME}</strong>. To update the name
+        on your home screen, remove this app’s icon and add it again from the
+        site.
+        <span
+          style={{
+            display: "block",
+            marginTop: "4px",
+            color: COLORS.textMuted,
+            fontSize: "11.5px",
+          }}
+        >
+          Already showing the new name? You can ignore this.
+        </span>
       </div>
       <button
         onClick={dismiss}
+        aria-label="Dismiss"
         style={{
           flexShrink: 0,
           fontSize: "12px",

@@ -1,6 +1,6 @@
 {
-  "name": "Tamil Calendar Alerts",
-  "short_name": "TamilCal",
+  "name": "நினைவூட்டல்கள் - Reminders",
+  "short_name": "Ninaivootal",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
