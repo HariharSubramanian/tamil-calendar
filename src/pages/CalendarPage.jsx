@@ -1,5 +1,5 @@
 // src/pages/CalendarPage.jsx
-// Reminders-only calendar
+// Reminders-only calendar. Logo-derived blue/navy palette via theme/colors.
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -7,10 +7,10 @@ import { getTamilMonthName } from "../utils/tamilDate";
 import { listReminders } from "../firebase/reminders";
 import { remindersForMonth, daysUntilNext } from "../utils/reminderDates";
 import SignOutButton from "../components/SignOutButton";
+import LoadingScreen from "../components/LoadingScreen";
+import { COLORS, REMINDER, SELECTED } from "../theme/colors";
 
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const REM_COLOR = { bg: "#E1F5EE", dot: "#0F6E56", text: "#0F6E56" };
-const ACCENT = "#8B0000";
 
 export default function CalendarPage() {
   const { user } = useAuth();
@@ -18,7 +18,6 @@ export default function CalendarPage() {
   const location = useLocation();
   const today = new Date();
 
-  // If we arrived with a focusDate (from the list "click a reminder"), open that month/day.
   const focusIso = location.state?.focusDate || null;
   const focusDate = focusIso ? new Date(focusIso) : null;
 
@@ -31,12 +30,26 @@ export default function CalendarPage() {
     focusDate ? focusDate.getDate() : today.getDate(),
   );
   const [reminders, setReminders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  function load() {
     if (!user) return;
+    setLoading(true);
+    setError(false);
     listReminders(user.uid)
-      .then(setReminders)
-      .catch((e) => console.error(e));
+      .then((data) => {
+        setReminders(data);
+        setLoading(false);
+      })
+      .catch((e) => {
+        console.error(e);
+        setError(true);
+        setLoading(false);
+      });
+  }
+  useEffect(() => {
+    load();
   }, [user]);
 
   const y = view.getFullYear();
@@ -71,6 +84,9 @@ export default function CalendarPage() {
     setSel(today.getDate());
   }
 
+  if (loading) return <LoadingScreen message="Loading your calendar…" />;
+  if (error) return <LoadingScreen onRetry={load} timeoutMs={0} />;
+
   return (
     <div
       style={{
@@ -94,7 +110,7 @@ export default function CalendarPage() {
             onClick={() => navigate("/reminders/add")}
             style={{
               fontSize: "13px",
-              background: REM_COLOR.dot,
+              background: COLORS.primary,
               color: "#fff",
               border: "none",
               borderRadius: "8px",
@@ -110,8 +126,8 @@ export default function CalendarPage() {
             style={{
               fontSize: "13px",
               background: "none",
-              color: REM_COLOR.dot,
-              border: `1px solid ${REM_COLOR.dot}`,
+              color: COLORS.primary,
+              border: `1px solid ${COLORS.primary}`,
               borderRadius: "8px",
               padding: "8px 12px",
               cursor: "pointer",
@@ -124,18 +140,17 @@ export default function CalendarPage() {
         <SignOutButton />
       </div>
 
-      {/* Upcoming banner */}
       {upcoming && (
         <div
           style={{
-            background: REM_COLOR.bg,
-            border: `1px solid ${REM_COLOR.dot}33`,
+            background: REMINDER.bg,
+            border: `1px solid ${REMINDER.dot}33`,
             borderRadius: "10px",
             padding: "10px 14px",
             marginBottom: "12px",
           }}
         >
-          <span style={{ color: REM_COLOR.text, fontWeight: 500 }}>
+          <span style={{ color: REMINDER.text, fontWeight: 500 }}>
             {upcoming.r.label}
           </span>
           <span style={{ color: "#555", fontSize: "13px" }}>
@@ -147,7 +162,7 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* Month navigation + Today */}
+      {/* Month navigation (Today button absolutely positioned) */}
       <div
         style={{
           display: "flex",
@@ -187,7 +202,6 @@ export default function CalendarPage() {
           ›
         </button>
 
-        {/* Today button — absolutely positioned so it doesn't shift the month name */}
         {showToday && (
           <button
             onClick={goToday}
@@ -197,7 +211,7 @@ export default function CalendarPage() {
               top: "50%",
               transform: "translateY(-50%)",
               fontSize: "11px",
-              background: REM_COLOR.dot,
+              background: COLORS.primary,
               color: "#fff",
               border: "none",
               borderRadius: "20px",
@@ -207,7 +221,7 @@ export default function CalendarPage() {
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
-              boxShadow: "0 1px 3px rgba(15,110,86,0.25)",
+              boxShadow: "0 1px 3px rgba(27,79,107,0.25)",
             }}
           >
             ↩ Today
@@ -247,7 +261,11 @@ export default function CalendarPage() {
           const hasRem = !!rmap[day];
           const isToday = day === today.getDate() && isThisMonth;
           const isSel = day === sel;
-          const cellBg = isSel ? ACCENT : hasRem ? REM_COLOR.bg : "transparent";
+          const cellBg = isSel
+            ? SELECTED
+            : hasRem
+              ? REMINDER.bg
+              : "transparent";
           return (
             <div
               key={day}
@@ -260,7 +278,7 @@ export default function CalendarPage() {
                 textAlign: "center",
                 background: cellBg,
                 border: isToday
-                  ? `1.5px solid ${ACCENT}`
+                  ? `1.5px solid ${SELECTED}`
                   : "1px solid transparent",
               }}
             >
@@ -268,7 +286,7 @@ export default function CalendarPage() {
                 style={{
                   fontSize: "13px",
                   fontWeight: isToday ? 600 : 400,
-                  color: isSel ? "#fff" : isToday ? ACCENT : "inherit",
+                  color: isSel ? "#fff" : isToday ? SELECTED : "inherit",
                 }}
               >
                 {day}
@@ -289,7 +307,7 @@ export default function CalendarPage() {
                         width: "5px",
                         height: "5px",
                         borderRadius: "50%",
-                        background: isSel ? "#fff" : REM_COLOR.dot,
+                        background: isSel ? "#fff" : REMINDER.dot,
                       }}
                     />
                   ))}
@@ -300,19 +318,19 @@ export default function CalendarPage() {
         })}
       </div>
 
-      {/* Detail panel (view-only) */}
+      {/* Detail panel */}
       {sel && (
         <div
           style={{
             marginTop: "14px",
             borderRadius: "12px",
-            border: "1px solid #cfe8df",
+            border: `1px solid ${COLORS.primary}44`,
             overflow: "hidden",
           }}
         >
           <div
             style={{
-              background: REM_COLOR.dot,
+              background: SELECTED,
               color: "#fff",
               padding: "10px 14px",
               fontSize: "13px",
@@ -321,7 +339,7 @@ export default function CalendarPage() {
           >
             {label} {sel}, {y}
           </div>
-          <div style={{ background: "#f4fbf8", padding: "12px 14px" }}>
+          <div style={{ background: "#f4f8fc", padding: "12px 14px" }}>
             {selRems.length === 0 ? (
               <p style={{ color: "#888", fontSize: "13px" }}>
                 No reminders on this day.
@@ -335,7 +353,7 @@ export default function CalendarPage() {
                   <div
                     style={{
                       fontSize: "13px",
-                      color: REM_COLOR.text,
+                      color: REMINDER.text,
                       marginTop: "2px",
                     }}
                   >
@@ -369,8 +387,8 @@ export default function CalendarPage() {
                       padding: "2px 8px",
                       borderRadius: "20px",
                       fontWeight: 500,
-                      background: REM_COLOR.bg,
-                      color: REM_COLOR.text,
+                      background: REMINDER.bg,
+                      color: REMINDER.text,
                     }}
                   >
                     Reminder
@@ -382,7 +400,6 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* Footer */}
       <div
         style={{
           marginTop: "20px",

@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## [1.2.0] — 2026-06-21
+
+### Added
+
+- Branded loading screen (app icon + spinning ring) while reminders load, on both the calendar and the reminders list
+- "Couldn't load — Retry" state if loading fails or times out
+
+### Changed
+
+- Recoloured the whole app to a blue/navy palette derived from the logo, with colours centralized in one theme file
+
 ## [1.1.0] — 2026-06-21
 
 ### Added

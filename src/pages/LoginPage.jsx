@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "../firebase/config";
-
-const FEST = "#8B0000";
-const REM = "#0F6E56";
+import { COLORS } from "../theme/colors";
 
 const FEATURES = [
   {
@@ -63,7 +61,7 @@ export default function LoginPage() {
     <div
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(180deg, #f4f9ff 0%, #ffffff 40%)",
+        background: `linear-gradient(180deg, ${COLORS.primaryBg} 0%, #ffffff 40%)`,
         fontFamily: "Noto Sans Tamil, system-ui, sans-serif",
         display: "flex",
         flexDirection: "column",
@@ -90,7 +88,7 @@ export default function LoginPage() {
             style={{
               fontSize: "26px",
               fontWeight: 700,
-              color: FEST,
+              color: COLORS.navy,
               margin: "12px 0 0",
             }}
           >
@@ -117,7 +115,7 @@ export default function LoginPage() {
             பிறந்தநாள், நட்சத்திர பிறந்தநாள் & ஆண்டு விழா நினைவூட்டல்கள் —
             ஒவ்வொரு ஆண்டும்.
             <br />
-            Never miss a date of birth, a star birthday or an Anniversary, year
+            Never miss a date of birth, a star birthday or an anniversary, year
             after year.
           </p>
         </div>
@@ -139,7 +137,7 @@ export default function LoginPage() {
                 gap: "12px",
                 alignItems: "flex-start",
                 background: "#fff",
-                border: "1px solid #eef0f2",
+                border: `1px solid ${COLORS.borderSoft}`,
                 borderRadius: "12px",
                 padding: "12px 14px",
               }}
@@ -151,7 +149,13 @@ export default function LoginPage() {
                 >
                   {f.en}
                 </div>
-                <div style={{ fontSize: "13px", color: REM, marginTop: "1px" }}>
+                <div
+                  style={{
+                    fontSize: "13px",
+                    color: COLORS.primary,
+                    marginTop: "1px",
+                  }}
+                >
                   {f.ta}
                 </div>
                 <div

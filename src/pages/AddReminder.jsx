@@ -1,9 +1,8 @@
 // ===========================================================================
 // src/pages/AddReminder.jsx
-// UI ONLY — add OR edit a reminder.
-//   Add mode:  /reminders/add
-//   Edit mode: /reminders/add?edit=<reminderId>  (form pre-fills, save updates)
-// On success, navigates to /reminders/list.
+// Add OR edit a reminder. Logo-derived blue/navy palette via theme/colors.
+//   Add:  /reminders/add        Edit: /reminders/add?edit=<id>
+// On success -> /reminders/list.
 // ===========================================================================
 
 import { useState, useEffect } from "react";
@@ -17,6 +16,7 @@ import {
   updateReminder,
 } from "../firebase/reminders";
 import SignOutButton from "../components/SignOutButton";
+import { COLORS } from "../theme/colors";
 
 const input = {
   width: "100%",
@@ -54,7 +54,7 @@ export default function AddReminder() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const editId = params.get("edit"); // null when adding
+  const editId = params.get("edit");
 
   const [type, setType] = useState("dob");
   const [occasion, setOccasion] = useState("birthday");
@@ -69,7 +69,6 @@ export default function AddReminder() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(!!editId);
 
-  // If editing, load the reminder and pre-fill the form.
   useEffect(() => {
     if (!editId || !user) return;
     setLoading(true);
@@ -109,12 +108,12 @@ export default function AddReminder() {
     let payload;
     if (type === "dob") {
       const d = parseInt(day, 10);
-      const m = parseInt(month, 10);
+      const mo = parseInt(month, 10);
       if (!d || d < 1 || d > 31) {
         setError("Please enter a valid day (1–31).");
         return;
       }
-      if (!m || m < 1 || m > 12) {
+      if (!mo || mo < 1 || mo > 12) {
         setError("Please choose a month.");
         return;
       }
@@ -123,7 +122,7 @@ export default function AddReminder() {
         occasion,
         label: label_.trim(),
         day: d,
-        month: m,
+        month: mo,
         year: year ? parseInt(year, 10) : null,
         alertMessage:
           alertMessage.trim() ||
@@ -146,11 +145,8 @@ export default function AddReminder() {
 
     setSaving(true);
     try {
-      if (editId) {
-        await updateReminder(user.uid, editId, payload);
-      } else {
-        await addReminder(user.uid, payload);
-      }
+      if (editId) await updateReminder(user.uid, editId, payload);
+      else await addReminder(user.uid, payload);
       navigate("/reminders/list");
     } catch (e) {
       console.error(e);
@@ -162,16 +158,16 @@ export default function AddReminder() {
   const typeBtn = (val, text) => (
     <button
       onClick={() => setType(val)}
-      disabled={!!editId} /* don't allow changing type while editing */
+      disabled={!!editId}
       style={{
         flex: 1,
         padding: "10px",
         fontSize: "13px",
         fontWeight: 500,
         cursor: editId ? "not-allowed" : "pointer",
-        border: type === val ? "2px solid #8B0000" : "1px solid #ddd",
-        background: type === val ? "#fff0f0" : "#fff",
-        color: type === val ? "#8B0000" : "#666",
+        border: type === val ? `2px solid ${COLORS.primary}` : "1px solid #ddd",
+        background: type === val ? COLORS.primaryBg : "#fff",
+        color: type === val ? COLORS.primary : "#666",
         borderRadius: "8px",
         opacity: editId && type !== val ? 0.5 : 1,
       }}
@@ -189,9 +185,10 @@ export default function AddReminder() {
         fontSize: "12.5px",
         fontWeight: 500,
         cursor: "pointer",
-        border: occasion === val ? "2px solid #0F6E56" : "1px solid #ddd",
-        background: occasion === val ? "#E1F5EE" : "#fff",
-        color: occasion === val ? "#0F6E56" : "#666",
+        border:
+          occasion === val ? `2px solid ${COLORS.navy}` : "1px solid #ddd",
+        background: occasion === val ? COLORS.navyBg : "#fff",
+        color: occasion === val ? COLORS.navy : "#666",
         borderRadius: "8px",
       }}
     >
@@ -310,9 +307,9 @@ export default function AddReminder() {
                 value={tamilMonth}
                 onChange={(e) => setTamilMonth(e.target.value)}
               >
-                {TAMIL_MONTHS.map((m) => (
-                  <option key={m.tamil} value={m.tamil}>
-                    {m.tamil} / {MONTH_TAMIL_TO_SCRIPT[m.tamil]}
+                {TAMIL_MONTHS.map((mm) => (
+                  <option key={mm.tamil} value={mm.tamil}>
+                    {mm.tamil} / {MONTH_TAMIL_TO_SCRIPT[mm.tamil]}
                   </option>
                 ))}
               </select>
@@ -351,7 +348,7 @@ export default function AddReminder() {
             style={{
               marginTop: "16px",
               width: "100%",
-              background: "#8B0000",
+              background: COLORS.primary,
               color: "#fff",
               border: "none",
               padding: "12px",

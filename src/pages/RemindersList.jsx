@@ -1,10 +1,7 @@
 // ===========================================================================
 // src/pages/RemindersList.jsx
-// View all reminders, split into two sections:
-//   1. "Upcoming this year"  — date this year is today or later (soonest first)
-//   2. "Earlier this year"   — date this year already passed (next-up first)
-// Each row: click → calendar jumps to its date.
-// Pencil → edit. Dustbin → delete (with confirm).
+// All reminders, split into "Upcoming this year" / "Earlier this year".
+// Logo-derived blue/navy palette via theme/colors.
 // ===========================================================================
 
 import { useState, useEffect, useMemo } from "react";
@@ -16,55 +13,54 @@ import { NAK_TAMIL_TO_SCRIPT } from "../data/nakshatras";
 import { listReminders, deleteReminder } from "../firebase/reminders";
 import { resolveReminderDate, daysUntilNext } from "../utils/reminderDates";
 import SignOutButton from "../components/SignOutButton";
+import LoadingScreen from "../components/LoadingScreen";
+import { COLORS, REMINDER } from "../theme/colors";
 
 export default function RemindersList() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [confirmId, setConfirmId] = useState(null);
 
-  async function refresh() {
+  function load() {
     if (!user) return;
     setLoading(true);
-    try {
-      setList(await listReminders(user.uid));
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    setError(false);
+    listReminders(user.uid)
+      .then((data) => {
+        setList(data);
+        setLoading(false);
+      })
+      .catch((e) => {
+        console.error(e);
+        setError(true);
+        setLoading(false);
+      });
   }
   useEffect(() => {
-    refresh();
+    load();
   }, [user]);
 
-  // Split into "upcoming this year" vs "earlier this year", each sorted.
   const { upcoming, earlier } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const year = today.getFullYear();
-
     const up = [];
     const past = [];
-
     list.forEach((r) => {
       const iso = resolveReminderDate(r, year);
       if (!iso) {
-        // Can't resolve a date for this year — drop into "earlier" so it's still visible.
-        past.push({ r, days: daysUntilNext(r, today), thisYearPassed: true });
+        past.push({ r, days: daysUntilNext(r, today) });
         return;
       }
       const d = new Date(iso);
       d.setHours(0, 0, 0, 0);
       const days = daysUntilNext(r, today);
-      if (d >= today) {
-        up.push({ r, days }); // still coming this calendar year
-      } else {
-        past.push({ r, days }); // already happened this year
-      }
+      if (d >= today) up.push({ r, days });
+      else past.push({ r, days });
     });
-
     const bySoonest = (a, b) => {
       if (a.days == null) return 1;
       if (b.days == null) return -1;
@@ -83,14 +79,12 @@ export default function RemindersList() {
       month: "long",
     });
   }
-
   function typeLabel(r) {
     if (r.type === "tamil") {
       return `${MONTH_TAMIL_TO_SCRIPT[r.tamilMonth] || r.tamilMonth} · ${NAK_TAMIL_TO_SCRIPT[r.tamilStar] || r.tamilStar}`;
     }
     return r.occasion === "anniversary" ? "Anniversary" : "Date of Birth";
   }
-
   function ordinal(n) {
     const s = ["th", "st", "nd", "rd"];
     const v = n % 100;
@@ -104,14 +98,12 @@ export default function RemindersList() {
       ? ` · ${n}${ordinal(n)} anniversary`
       : ` · turning ${n}`;
   }
-
   function countdown(days) {
     if (days == null) return "";
     if (days === 0) return "Today";
     if (days === 1) return "Tomorrow";
     return `in ${days} days`;
   }
-
   function goToCalendar(r) {
     const iso = resolveReminderDate(r, new Date().getFullYear());
     if (!iso) {
@@ -120,19 +112,18 @@ export default function RemindersList() {
     }
     navigate("/calendar", { state: { focusDate: iso } });
   }
-
   async function doDelete(id) {
     try {
       await deleteReminder(user.uid, id);
       setConfirmId(null);
-      await refresh();
+      load();
     } catch (e) {
       console.error(e);
     }
   }
 
   const iconBtn = {
-    border: "1px solid #eee",
+    border: `1px solid ${COLORS.borderSoft}`,
     borderRadius: "8px",
     background: "none",
     padding: "6px",
@@ -142,12 +133,11 @@ export default function RemindersList() {
     justifyContent: "center",
   };
 
-  // Renders one reminder card.
   const card = ({ r, days }, faded) => (
     <div
       key={r.id}
       style={{
-        border: "1px solid #eee",
+        border: `1px solid ${COLORS.borderSoft}`,
         borderRadius: "10px",
         padding: "12px",
         marginBottom: "8px",
@@ -179,8 +169,8 @@ export default function RemindersList() {
                 style={{
                   fontSize: "10.5px",
                   fontWeight: 500,
-                  color: "#0F6E56",
-                  background: "#E1F5EE",
+                  color: REMINDER.text,
+                  background: REMINDER.bg,
                   borderRadius: "20px",
                   padding: "1px 8px",
                 }}
@@ -189,7 +179,9 @@ export default function RemindersList() {
               </span>
             )}
           </div>
-          <div style={{ fontSize: "13px", color: "#8B0000", marginTop: "2px" }}>
+          <div
+            style={{ fontSize: "13px", color: COLORS.navy, marginTop: "2px" }}
+          >
             {typeLabel(r)}
           </div>
           <div style={{ fontSize: "12px", color: "#666", marginTop: "3px" }}>
@@ -203,24 +195,23 @@ export default function RemindersList() {
             title="Edit"
             onClick={() => navigate(`/reminders/add?edit=${r.id}`)}
           >
-            <Pencil size={16} color="#0F6E56" />
+            <Pencil size={16} color={COLORS.primary} />
           </button>
           <button
             style={iconBtn}
             title="Delete"
             onClick={() => setConfirmId(r.id)}
           >
-            <Trash2 size={16} color="#c0392b" />
+            <Trash2 size={16} color={COLORS.danger} />
           </button>
         </div>
       </div>
-
       {confirmId === r.id && (
         <div
           style={{
             marginTop: "10px",
             padding: "10px",
-            background: "#fff5f5",
+            background: COLORS.dangerBg,
             border: "1px solid #f3c0c0",
             borderRadius: "8px",
           }}
@@ -233,7 +224,7 @@ export default function RemindersList() {
               onClick={() => doDelete(r.id)}
               style={{
                 fontSize: "12px",
-                background: "#c0392b",
+                background: COLORS.danger,
                 color: "#fff",
                 border: "none",
                 borderRadius: "6px",
@@ -263,6 +254,9 @@ export default function RemindersList() {
     </div>
   );
 
+  if (loading) return <LoadingScreen message="Loading your reminders…" />;
+  if (error) return <LoadingScreen onRetry={load} timeoutMs={0} />;
+
   return (
     <div
       style={{
@@ -272,7 +266,6 @@ export default function RemindersList() {
         fontFamily: "Noto Sans Tamil, system-ui, sans-serif",
       }}
     >
-      {/* Header bar */}
       <div
         style={{
           display: "flex",
@@ -312,7 +305,7 @@ export default function RemindersList() {
           onClick={() => navigate("/reminders/add")}
           style={{
             fontSize: "13px",
-            background: "#0F6E56",
+            background: COLORS.primary,
             color: "#fff",
             border: "none",
             borderRadius: "8px",
@@ -325,20 +318,17 @@ export default function RemindersList() {
         </button>
       </div>
 
-      {loading ? (
-        <p style={{ fontSize: "13px", color: "#888" }}>Loading…</p>
-      ) : upcoming.length === 0 && earlier.length === 0 ? (
+      {upcoming.length === 0 && earlier.length === 0 ? (
         <p style={{ fontSize: "13px", color: "#999" }}>
           No reminders yet. Tap “+ Add” to create one.
         </p>
       ) : (
         <>
-          {/* Section 1: upcoming this year */}
           <h3
             style={{
               fontSize: "12px",
               fontWeight: 600,
-              color: "#0F6E56",
+              color: COLORS.primary,
               textTransform: "uppercase",
               letterSpacing: "0.04em",
               margin: "4px 0 8px",
@@ -360,7 +350,6 @@ export default function RemindersList() {
             upcoming.map((item) => card(item, false))
           )}
 
-          {/* Section 2: earlier this year (already passed → next up next year) */}
           {earlier.length > 0 && (
             <>
               <h3
