@@ -1,22 +1,21 @@
 // ===========================================================================
 // src/pages/AddReminder.jsx
-// UI ONLY — add a reminder of type DOB/Anniversary or Tamil (star) birthday.
-//   dob:   day + month mandatory, year optional. occasion = birthday | anniversary.
-//   tamil: Tamil month + star mandatory.
-// On successful save, navigates back to /calendar.
+// UI ONLY — add OR edit a reminder.
+//   Add mode:  /reminders/add
+//   Edit mode: /reminders/add?edit=<reminderId>  (form pre-fills, save updates)
+// On success, navigates to /reminders/list.
 // ===========================================================================
 
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { NAKSHATRAS, NAK_TAMIL_TO_SCRIPT } from "../data/nakshatras";
 import { TAMIL_MONTHS, MONTH_TAMIL_TO_SCRIPT } from "../data/tamilMonths";
 import {
   addReminder,
-  listReminders,
-  deleteReminder,
+  getReminder,
+  updateReminder,
 } from "../firebase/reminders";
-import { resolveReminderDate } from "../utils/reminderDates";
 import SignOutButton from "../components/SignOutButton";
 
 const input = {
@@ -54,34 +53,51 @@ const MONTHS_EN = [
 export default function AddReminder() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const editId = params.get("edit"); // null when adding
 
-  const [type, setType] = useState("dob"); // "dob" | "tamil"
-  const [occasion, setOccasion] = useState("birthday"); // "birthday" | "anniversary" (dob only)
+  const [type, setType] = useState("dob");
+  const [occasion, setOccasion] = useState("birthday");
   const [label_, setLabel] = useState("");
-  // DOB fields
   const [day, setDay] = useState("");
   const [month, setMonth] = useState("1");
   const [year, setYear] = useState("");
-  // Tamil fields
   const [tamilMonth, setTamilMonth] = useState(TAMIL_MONTHS[0].tamil);
   const [tamilStar, setTamilStar] = useState(NAKSHATRAS[0].tamil);
-  // Common
   const [alertMessage, setAlertMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(!!editId);
 
-  async function refresh() {
-    if (!user) return;
-    try {
-      setList(await listReminders(user.uid));
-    } catch (e) {
-      console.error(e);
-    }
-  }
+  // If editing, load the reminder and pre-fill the form.
   useEffect(() => {
-    refresh();
-  }, [user]);
+    if (!editId || !user) return;
+    setLoading(true);
+    getReminder(user.uid, editId)
+      .then((r) => {
+        if (!r) {
+          setError("Reminder not found.");
+          return;
+        }
+        setType(r.type);
+        setLabel(r.label || "");
+        setAlertMessage(r.alertMessage || "");
+        if (r.type === "dob") {
+          setOccasion(r.occasion || "birthday");
+          setDay(r.day != null ? String(r.day) : "");
+          setMonth(r.month != null ? String(r.month) : "1");
+          setYear(r.year != null ? String(r.year) : "");
+        } else {
+          setTamilMonth(r.tamilMonth || TAMIL_MONTHS[0].tamil);
+          setTamilStar(r.tamilStar || NAKSHATRAS[0].tamil);
+        }
+      })
+      .catch((e) => {
+        console.error(e);
+        setError("Could not load reminder.");
+      })
+      .finally(() => setLoading(false));
+  }, [editId, user]);
 
   async function handleSave() {
     setError("");
@@ -104,7 +120,7 @@ export default function AddReminder() {
       }
       payload = {
         type: "dob",
-        occasion, // "birthday" | "anniversary"
+        occasion,
         label: label_.trim(),
         day: d,
         month: m,
@@ -130,9 +146,12 @@ export default function AddReminder() {
 
     setSaving(true);
     try {
-      await addReminder(user.uid, payload);
-      // On success, go back to the calendar (where the new reminder shows).
-      navigate("/calendar");
+      if (editId) {
+        await updateReminder(user.uid, editId, payload);
+      } else {
+        await addReminder(user.uid, payload);
+      }
+      navigate("/reminders/list");
     } catch (e) {
       console.error(e);
       setError("Could not save. " + e.message);
@@ -140,59 +159,21 @@ export default function AddReminder() {
     }
   }
 
-  async function handleDelete(id) {
-    try {
-      await deleteReminder(user.uid, id);
-      await refresh();
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  function describeDate(r) {
-    const iso = resolveReminderDate(r, new Date().getFullYear());
-    if (!iso) return "";
-    return new Date(iso).toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "long",
-    });
-  }
-
-  function typeLabel(r) {
-    if (r.type === "tamil") {
-      return `${MONTH_TAMIL_TO_SCRIPT[r.tamilMonth] || r.tamilMonth} · ${NAK_TAMIL_TO_SCRIPT[r.tamilStar] || r.tamilStar}`;
-    }
-    return r.occasion === "anniversary" ? "Anniversary" : "Date of Birth";
-  }
-
-  function ordinal(n) {
-    const s = ["th", "st", "nd", "rd"];
-    const v = n % 100;
-    return s[(v - 20) % 10] || s[v] || s[0];
-  }
-
-  function yearsSuffix(r) {
-    if (r.type !== "dob" || !r.year) return "";
-    const n = new Date().getFullYear() - r.year;
-    if (n < 0) return "";
-    return r.occasion === "anniversary"
-      ? ` (${n}${ordinal(n)} anniversary)`
-      : ` (turning ${n})`;
-  }
-
   const typeBtn = (val, text) => (
     <button
       onClick={() => setType(val)}
+      disabled={!!editId} /* don't allow changing type while editing */
       style={{
         flex: 1,
         padding: "10px",
         fontSize: "13px",
         fontWeight: 500,
-        cursor: "pointer",
+        cursor: editId ? "not-allowed" : "pointer",
         border: type === val ? "2px solid #8B0000" : "1px solid #ddd",
         background: type === val ? "#fff0f0" : "#fff",
         color: type === val ? "#8B0000" : "#666",
         borderRadius: "8px",
+        opacity: editId && type !== val ? 0.5 : 1,
       }}
     >
       {text}
@@ -227,7 +208,6 @@ export default function AddReminder() {
         fontFamily: "Noto Sans Tamil, system-ui, sans-serif",
       }}
     >
-      {/* Header bar: Close + Sign out */}
       <div
         style={{
           display: "flex",
@@ -237,7 +217,7 @@ export default function AddReminder() {
         }}
       >
         <button
-          onClick={() => navigate("/calendar")}
+          onClick={() => navigate(editId ? "/reminders/list" : "/calendar")}
           style={{
             fontSize: "14px",
             border: "1px solid #ddd",
@@ -253,189 +233,138 @@ export default function AddReminder() {
       </div>
 
       <h2 style={{ fontSize: "18px", fontWeight: 500, marginBottom: "12px" }}>
-        Add a Reminder
+        {editId ? "Edit Reminder" : "Add a Reminder"}
       </h2>
 
-      {/* Type chooser */}
-      <div style={{ display: "flex", gap: "8px" }}>
-        {typeBtn("dob", "Date / Anniversary")}
-        {typeBtn("tamil", "Tamil (Star) Birthday")}
-      </div>
-
-      <label style={label}>Name / Label</label>
-      <input
-        style={input}
-        value={label_}
-        onChange={(e) => setLabel(e.target.value)}
-        placeholder={type === "dob" ? "e.g. Amma / Wedding Day" : "e.g. Amma"}
-      />
-
-      {type === "dob" ? (
+      {loading ? (
+        <p style={{ fontSize: "13px", color: "#888" }}>Loading…</p>
+      ) : (
         <>
-          <label style={label}>Occasion</label>
           <div style={{ display: "flex", gap: "8px" }}>
-            {occBtn("birthday", "🎂 Birthday")}
-            {occBtn("anniversary", "💍 Anniversary")}
+            {typeBtn("dob", "Date / Anniversary")}
+            {typeBtn("tamil", "Tamil (Star) Birthday")}
           </div>
 
-          <label style={label}>Day & Month (required)</label>
-          <div style={{ display: "flex", gap: "8px" }}>
-            <input
-              style={{ ...input, flex: 1 }}
-              type="number"
-              min="1"
-              max="31"
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-              placeholder="Day"
-            />
-            <select
-              style={{ ...input, flex: 2 }}
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-            >
-              {MONTHS_EN.map((mn, i) => (
-                <option key={mn} value={i + 1}>
-                  {mn}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <label style={label}>
-            {occasion === "anniversary"
-              ? "Year of the event (optional — shows Nth anniversary)"
-              : "Birth Year (optional — shows age)"}
-          </label>
+          <label style={label}>Name / Label</label>
           <input
             style={input}
-            type="number"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            placeholder={occasion === "anniversary" ? "e.g. 2010" : "e.g. 1990"}
+            value={label_}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder={
+              type === "dob" ? "e.g. Amma / Wedding Day" : "e.g. Amma"
+            }
           />
-        </>
-      ) : (
-        <>
-          <label style={label}>Tamil Month (required)</label>
-          <select
+
+          {type === "dob" ? (
+            <>
+              <label style={label}>Occasion</label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {occBtn("birthday", "🎂 Birthday")}
+                {occBtn("anniversary", "💍 Anniversary")}
+              </div>
+
+              <label style={label}>Day & Month (required)</label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  style={{ ...input, flex: 1 }}
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={day}
+                  onChange={(e) => setDay(e.target.value)}
+                  placeholder="Day"
+                />
+                <select
+                  style={{ ...input, flex: 2 }}
+                  value={month}
+                  onChange={(e) => setMonth(e.target.value)}
+                >
+                  {MONTHS_EN.map((mn, i) => (
+                    <option key={mn} value={i + 1}>
+                      {mn}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <label style={label}>
+                {occasion === "anniversary"
+                  ? "Year of the event (optional — shows Nth anniversary)"
+                  : "Birth Year (optional — shows age)"}
+              </label>
+              <input
+                style={input}
+                type="number"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                placeholder={
+                  occasion === "anniversary" ? "e.g. 2010" : "e.g. 1990"
+                }
+              />
+            </>
+          ) : (
+            <>
+              <label style={label}>Tamil Month (required)</label>
+              <select
+                style={input}
+                value={tamilMonth}
+                onChange={(e) => setTamilMonth(e.target.value)}
+              >
+                {TAMIL_MONTHS.map((m) => (
+                  <option key={m.tamil} value={m.tamil}>
+                    {m.tamil} / {MONTH_TAMIL_TO_SCRIPT[m.tamil]}
+                  </option>
+                ))}
+              </select>
+              <label style={label}>Star / Nakshatram (required)</label>
+              <select
+                style={input}
+                value={tamilStar}
+                onChange={(e) => setTamilStar(e.target.value)}
+              >
+                {NAKSHATRAS.map((n) => (
+                  <option key={n.tamil} value={n.tamil}>
+                    {n.tamil} / {NAK_TAMIL_TO_SCRIPT[n.tamil]}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+
+          <label style={label}>Alert Message (optional)</label>
+          <input
             style={input}
-            value={tamilMonth}
-            onChange={(e) => setTamilMonth(e.target.value)}
-          >
-            {TAMIL_MONTHS.map((m) => (
-              <option key={m.tamil} value={m.tamil}>
-                {m.tamil} / {MONTH_TAMIL_TO_SCRIPT[m.tamil]}
-              </option>
-            ))}
-          </select>
-          <label style={label}>Star / Nakshatram (required)</label>
-          <select
-            style={input}
-            value={tamilStar}
-            onChange={(e) => setTamilStar(e.target.value)}
-          >
-            {NAKSHATRAS.map((n) => (
-              <option key={n.tamil} value={n.tamil}>
-                {n.tamil} / {NAK_TAMIL_TO_SCRIPT[n.tamil]}
-              </option>
-            ))}
-          </select>
-        </>
-      )}
+            value={alertMessage}
+            onChange={(e) => setAlertMessage(e.target.value)}
+            placeholder="e.g. Wish Amma!"
+          />
 
-      <label style={label}>Alert Message (optional)</label>
-      <input
-        style={input}
-        value={alertMessage}
-        onChange={(e) => setAlertMessage(e.target.value)}
-        placeholder="e.g. Wish Amma!"
-      />
+          {error && (
+            <p style={{ color: "#c00", fontSize: "13px", marginTop: "10px" }}>
+              {error}
+            </p>
+          )}
 
-      {error && (
-        <p style={{ color: "#c00", fontSize: "13px", marginTop: "10px" }}>
-          {error}
-        </p>
-      )}
-
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        style={{
-          marginTop: "16px",
-          width: "100%",
-          background: "#8B0000",
-          color: "#fff",
-          border: "none",
-          padding: "12px",
-          borderRadius: "10px",
-          fontSize: "15px",
-          fontWeight: 500,
-          cursor: saving ? "default" : "pointer",
-          opacity: saving ? 0.6 : 1,
-        }}
-      >
-        {saving ? "Saving…" : "Save Reminder"}
-      </button>
-
-      <h3
-        style={{
-          fontSize: "15px",
-          fontWeight: 500,
-          marginTop: "28px",
-          marginBottom: "8px",
-        }}
-      >
-        Saved Reminders
-      </h3>
-      {list.length === 0 ? (
-        <p style={{ fontSize: "13px", color: "#999" }}>
-          None yet. Add one above.
-        </p>
-      ) : (
-        list.map((r) => (
-          <div
-            key={r.id}
+          <button
+            onClick={handleSave}
+            disabled={saving}
             style={{
-              border: "1px solid #eee",
-              borderRadius: "10px",
+              marginTop: "16px",
+              width: "100%",
+              background: "#8B0000",
+              color: "#fff",
+              border: "none",
               padding: "12px",
-              marginBottom: "8px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
+              borderRadius: "10px",
+              fontSize: "15px",
+              fontWeight: 500,
+              cursor: saving ? "default" : "pointer",
+              opacity: saving ? 0.6 : 1,
             }}
           >
-            <div>
-              <div style={{ fontWeight: 500, fontSize: "14px" }}>{r.label}</div>
-              <div
-                style={{ fontSize: "13px", color: "#8B0000", marginTop: "2px" }}
-              >
-                {typeLabel(r)}
-              </div>
-              <div
-                style={{ fontSize: "12px", color: "#666", marginTop: "3px" }}
-              >
-                This year: {describeDate(r)}
-                {yearsSuffix(r)}
-              </div>
-            </div>
-            <button
-              onClick={() => handleDelete(r.id)}
-              style={{
-                fontSize: "12px",
-                color: "#999",
-                border: "1px solid #eee",
-                borderRadius: "6px",
-                padding: "4px 8px",
-                cursor: "pointer",
-                background: "none",
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        ))
+            {saving ? "Saving…" : editId ? "Update Reminder" : "Save Reminder"}
+          </button>
+        </>
       )}
     </div>
   );

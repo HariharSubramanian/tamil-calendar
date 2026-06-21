@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import CalendarPage from "./pages/CalendarPage";
 import AddReminder from "./pages/AddReminder";
+import RemindersList from "./pages/RemindersList";
 import "./index.css";
 
 function PrivateRoute({ children }) {
@@ -29,10 +30,18 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/reminders"
+        path="/reminders/add"
         element={
           <PrivateRoute>
             <AddReminder />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/reminders/list"
+        element={
+          <PrivateRoute>
+            <RemindersList />
           </PrivateRoute>
         }
       />

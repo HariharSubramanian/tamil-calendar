@@ -1,6 +1,7 @@
 // src/pages/CalendarPage.jsx
+// Reminders-only calendar
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { getTamilMonthName } from "../utils/tamilDate";
 import { listReminders } from "../firebase/reminders";
@@ -14,11 +15,21 @@ const ACCENT = "#8B0000";
 export default function CalendarPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const today = new Date();
+
+  // If we arrived with a focusDate (from the list "click a reminder"), open that month/day.
+  const focusIso = location.state?.focusDate || null;
+  const focusDate = focusIso ? new Date(focusIso) : null;
+
   const [view, setView] = useState(
-    new Date(today.getFullYear(), today.getMonth(), 1),
+    focusDate
+      ? new Date(focusDate.getFullYear(), focusDate.getMonth(), 1)
+      : new Date(today.getFullYear(), today.getMonth(), 1),
   );
-  const [sel, setSel] = useState(null);
+  const [sel, setSel] = useState(
+    focusDate ? focusDate.getDate() : today.getDate(),
+  );
   const [reminders, setReminders] = useState([]);
 
   useEffect(() => {
@@ -35,13 +46,11 @@ export default function CalendarPage() {
   const label = view.toLocaleString("default", { month: "long" });
   const taMonth = getTamilMonthName(new Date(y, m, 15));
 
-  // Reminders for this month/year — Tamil dates recalculated per year (cached).
   const rmap = useMemo(
     () => remindersForMonth(reminders, y, m),
     [reminders, y, m],
   );
 
-  // Soonest upcoming reminder, for the banner.
   const upcoming = useMemo(() => {
     let best = null;
     reminders.forEach((r) => {
@@ -53,6 +62,14 @@ export default function CalendarPage() {
   }, [reminders]);
 
   const selRems = sel ? rmap[sel] || [] : [];
+  const isThisMonth = m === today.getMonth() && y === today.getFullYear();
+  const onTodayExactly = isThisMonth && sel === today.getDate();
+  const showToday = !isThisMonth || (sel !== null && !onTodayExactly);
+
+  function goToday() {
+    setView(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSel(today.getDate());
+  }
 
   return (
     <div
@@ -63,7 +80,7 @@ export default function CalendarPage() {
         fontFamily: "Noto Sans Tamil, system-ui, sans-serif",
       }}
     >
-      {/* Header bar: Add Reminder + Sign out */}
+      {/* Header: Add + View all + Sign out */}
       <div
         style={{
           display: "flex",
@@ -72,25 +89,42 @@ export default function CalendarPage() {
           marginBottom: "12px",
         }}
       >
-        <button
-          onClick={() => navigate("/reminders")}
-          style={{
-            fontSize: "13px",
-            background: REM_COLOR.dot,
-            color: "#fff",
-            border: "none",
-            borderRadius: "8px",
-            padding: "8px 14px",
-            cursor: "pointer",
-            fontWeight: 500,
-          }}
-        >
-          + Add Reminder
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            onClick={() => navigate("/reminders/add")}
+            style={{
+              fontSize: "13px",
+              background: REM_COLOR.dot,
+              color: "#fff",
+              border: "none",
+              borderRadius: "8px",
+              padding: "8px 12px",
+              cursor: "pointer",
+              fontWeight: 500,
+            }}
+          >
+            + Add
+          </button>
+          <button
+            onClick={() => navigate("/reminders/list")}
+            style={{
+              fontSize: "13px",
+              background: "none",
+              color: REM_COLOR.dot,
+              border: `1px solid ${REM_COLOR.dot}`,
+              borderRadius: "8px",
+              padding: "8px 12px",
+              cursor: "pointer",
+              fontWeight: 500,
+            }}
+          >
+            View all
+          </button>
+        </div>
         <SignOutButton />
       </div>
 
-      {/* Upcoming reminder banner (free in-app reminder) */}
+      {/* Upcoming banner */}
       {upcoming && (
         <div
           style={{
@@ -113,12 +147,13 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* Month navigation */}
+      {/* Month navigation + Today */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          position: "relative",
         }}
       >
         <button
@@ -151,6 +186,33 @@ export default function CalendarPage() {
         >
           ›
         </button>
+
+        {/* Today button — absolutely positioned so it doesn't shift the month name */}
+        {showToday && (
+          <button
+            onClick={goToday}
+            style={{
+              position: "absolute",
+              right: "44px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              fontSize: "11px",
+              background: REM_COLOR.dot,
+              color: "#fff",
+              border: "none",
+              borderRadius: "20px",
+              padding: "4px 12px",
+              cursor: "pointer",
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              boxShadow: "0 1px 3px rgba(15,110,86,0.25)",
+            }}
+          >
+            ↩ Today
+          </button>
+        )}
       </div>
 
       {/* Grid */}
@@ -159,7 +221,7 @@ export default function CalendarPage() {
           display: "grid",
           gridTemplateColumns: "repeat(7,1fr)",
           gap: "2px",
-          marginTop: "14px",
+          marginTop: "12px",
         }}
       >
         {WD.map((d) => (
@@ -183,10 +245,7 @@ export default function CalendarPage() {
           ))}
         {Array.from({ length: days }, (_, i) => i + 1).map((day) => {
           const hasRem = !!rmap[day];
-          const isToday =
-            day === today.getDate() &&
-            m === today.getMonth() &&
-            y === today.getFullYear();
+          const isToday = day === today.getDate() && isThisMonth;
           const isSel = day === sel;
           const cellBg = isSel ? ACCENT : hasRem ? REM_COLOR.bg : "transparent";
           return (
@@ -241,7 +300,7 @@ export default function CalendarPage() {
         })}
       </div>
 
-      {/* Detail panel */}
+      {/* Detail panel (view-only) */}
       {sel && (
         <div
           style={{
