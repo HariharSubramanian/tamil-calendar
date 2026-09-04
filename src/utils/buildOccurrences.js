@@ -22,8 +22,9 @@ function toISO(d) {
 // importantly a 29 February DOB in a non-leap year, where resolveReminderDate
 // happily builds "2027-02-29".
 function isRealDate(iso) {
-  const d = new Date(iso);
-  return !Number.isNaN(d.getTime()) && iso === toISO(d);
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return !Number.isNaN(date.getTime()) && iso === toISO(date);
 }
 
 // Build the next `count` occurrence dates, starting from today. Scans forward
