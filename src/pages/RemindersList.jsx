@@ -6,12 +6,17 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { MONTH_TAMIL_TO_SCRIPT } from "../data/tamilMonths";
 import { NAK_TAMIL_TO_SCRIPT } from "../data/nakshatras";
-import { listReminders, deleteReminder } from "../firebase/reminders";
+import {
+  listReminders,
+  deleteReminder,
+  updateReminder,
+} from "../firebase/reminders";
 import { resolveReminderDate, daysUntilNext } from "../utils/reminderDates";
+import { buildOccurrences } from "../utils/buildOccurrences";
 import SignOutButton from "../components/SignOutButton";
 import LoadingScreen from "../components/LoadingScreen";
 import { COLORS, REMINDER } from "../theme/colors";
@@ -32,6 +37,8 @@ export default function RemindersList() {
       .then((data) => {
         setList(data);
         setLoading(false);
+        // Fire-and-forget: the list is already on screen by now.
+        topUpOccurrences(data);
       })
       .catch((e) => {
         console.error(e);
@@ -39,6 +46,31 @@ export default function RemindersList() {
         setLoading(false);
       });
   }
+
+  // Reminders created before v1.4 have no `occurrences` array, and stored
+  // arrays drain as years pass. Top them up quietly on load so Phase 2's
+  // scheduled function always has dates to query. Runs after the list has
+  // already rendered — nothing here blocks the UI.
+  async function topUpOccurrences(reminders) {
+    const todayIso = new Date().toISOString().slice(0, 10);
+
+    for (const r of reminders) {
+      const stored = Array.isArray(r.occurrences) ? r.occurrences : [];
+      const futureCount = stored.filter((d) => d >= todayIso).length;
+      if (futureCount >= 3) continue; // still has enough runway
+
+      const fresh = buildOccurrences(r);
+      if (fresh.length === 0) continue; // unresolvable — don't write junk
+      if (fresh.join() === stored.join()) continue; // no change, skip the write
+
+      try {
+        await updateReminder(user.uid, r.id, { occurrences: fresh });
+      } catch (e) {
+        console.error("occurrences top-up failed for", r.id, e);
+      }
+    }
+  }
+
   useEffect(() => {
     load();
   }, [user]);
@@ -287,7 +319,16 @@ export default function RemindersList() {
         >
           ✕ Close
         </button>
-        <SignOutButton />
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <button
+            onClick={() => navigate("/settings")}
+            title="Settings"
+            style={iconBtn}
+          >
+            <SettingsIcon size={16} color={COLORS.navy} />
+          </button>
+          <SignOutButton />
+        </div>
       </div>
 
       <div

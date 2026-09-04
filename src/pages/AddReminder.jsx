@@ -15,6 +15,7 @@ import {
   getReminder,
   updateReminder,
 } from "../firebase/reminders";
+import { buildOccurrences } from "../utils/buildOccurrences";
 import SignOutButton from "../components/SignOutButton";
 import { COLORS } from "../theme/colors";
 
@@ -145,6 +146,13 @@ export default function AddReminder() {
 
     setSaving(true);
     try {
+      // Compute the next few occurrence dates and store them alongside the
+      // reminder, so Phase 2's scheduled function can query by date without
+      // running panchangam calculations server-side. Done inside the try block
+      // so the button already reads "Saving…" while this runs — for a Tamil
+      // reminder it scans ~a month of days per year, five years over.
+      payload.occurrences = buildOccurrences(payload);
+
       if (editId) await updateReminder(user.uid, editId, payload);
       else await addReminder(user.uid, payload);
       navigate("/reminders/list");

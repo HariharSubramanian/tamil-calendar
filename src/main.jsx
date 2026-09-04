@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage";
 import CalendarPage from "./pages/CalendarPage";
 import AddReminder from "./pages/AddReminder";
 import RemindersList from "./pages/RemindersList";
+import Settings from "./pages/Settings";
 import "./index.css";
 
 function PrivateRoute({ children }) {
@@ -42,6 +43,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <RemindersList />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <PrivateRoute>
+            <Settings />
           </PrivateRoute>
         }
       />

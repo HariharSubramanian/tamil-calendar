@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase/config";
+import { upsertUserProfile } from "../firebase/userProfile";
 
 const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
@@ -10,6 +11,15 @@ export function AuthProvider({ children }) {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
+
+      // Fire-and-forget: create or refresh the users/{uid} profile document.
+      // Deliberately NOT awaited — the app must render immediately on sign-in,
+      // and a slow or failed Firestore write should never block the UI.
+      if (u) {
+        upsertUserProfile(u).catch((err) =>
+          console.error("upsertUserProfile failed:", err),
+        );
+      }
     });
     return () => unsub();
   }, []);
