@@ -4,13 +4,13 @@
 // This is what makes reminders recur every year forever:
 //   - DOB:   trivial — same month/day each year.
 //   - Tamil: recalculated per year via findStarBirthday (date shifts yearly).
-// Tamil results are cached per (reminderId + year) so each year is computed
-// at most once per session (good performance, always correct for any year).
+// Tamil results are cached per (tamilMonth + tamilStar + year) so each combo is
+// computed at most once per session (and shared across reminders that match).
 // ===========================================================================
 
 import { findStarBirthday, toISODate } from "./starDate";
 
-const tamilCache = new Map(); // key: `${id}|${year}` -> ISO date string | null
+const tamilCache = new Map(); // key: `${tamilMonth}|${tamilStar}|${year}` -> ISO date string | null
 
 // Resolve ONE reminder to an ISO date (YYYY-MM-DD) in the given year, or null.
 export function resolveReminderDate(reminder, year) {
@@ -23,9 +23,11 @@ export function resolveReminderDate(reminder, year) {
   }
 
   if (reminder.type === "tamil") {
-    const key = `${reminder.id}|${year}`;
+    const { tamilMonth, tamilStar } = reminder;
+    if (!tamilMonth || !tamilStar) return null;
+    const key = `${tamilMonth}|${tamilStar}|${year}`;
     if (tamilCache.has(key)) return tamilCache.get(key);
-    const d = findStarBirthday(reminder.tamilMonth, reminder.tamilStar, year);
+    const d = findStarBirthday(tamilMonth, tamilStar, year);
     const iso = d ? toISODate(d) : null;
     tamilCache.set(key, iso);
     return iso;
