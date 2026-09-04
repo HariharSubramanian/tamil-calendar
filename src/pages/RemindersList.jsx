@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { MONTH_TAMIL_TO_SCRIPT } from "../data/tamilMonths";
 import { NAK_TAMIL_TO_SCRIPT } from "../data/nakshatras";
@@ -319,7 +319,16 @@ export default function RemindersList() {
         >
           ✕ Close
         </button>
-        <SignOutButton />
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <button
+            onClick={() => navigate("/settings")}
+            title="Settings"
+            style={iconBtn}
+          >
+            <SettingsIcon size={16} color={COLORS.navy} />
+          </button>
+          <SignOutButton />
+        </div>
       </div>
 
       <div
