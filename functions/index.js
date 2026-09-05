@@ -16,7 +16,6 @@
 // ===========================================================================
 
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onRequest } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
@@ -84,7 +83,7 @@ function buildMessage(displayName, reminders, isoDate) {
   return { subject, text, html };
 }
 
-// The actual work, shared by the scheduled and manual entry points.
+// The actual work of one digest run.
 async function sendDigests() {
   const isoDate = todayIso();
   logger.info("Digest run starting", { isoDate });
@@ -152,12 +151,3 @@ exports.dailyDigest = onSchedule(
     await sendDigests();
   },
 );
-
-// TEMPORARY: manual trigger so the digest can be tested without waiting for
-// 6 AM. Remove or protect before this app is public — anyone with the URL can
-// invoke it. The lastNotifiedDate guard means repeat calls in one day are
-// no-ops, which limits the damage.
-exports.runDigestNow = onRequest({ region: "asia-south1" }, async (req, res) => {
-  const result = await sendDigests();
-  res.json(result);
-});
