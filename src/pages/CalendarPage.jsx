@@ -9,7 +9,6 @@ import { remindersForMonth, daysUntilNext } from "../utils/reminderDates";
 import SignOutButton from "../components/SignOutButton";
 import LoadingScreen from "../components/LoadingScreen";
 import { COLORS, REMINDER, SELECTED } from "../theme/colors";
-import RenameNotice from "../components/RenameNotice";
 
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -97,7 +96,6 @@ export default function CalendarPage() {
         fontFamily: "Noto Sans Tamil, system-ui, sans-serif",
       }}
     >
-      <RenameNotice />
       {/* Header: Add + View all + Sign out */}
       <div
         style={{
