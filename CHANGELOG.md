@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here.
 
+## [1.4.1] — Unreleased
+
+### Changed
+
+- The daily digest now sends at 6:00 AM in **each user's own timezone** instead of a fixed 6:00 AM IST. The scheduled function runs hourly and mails each user on the first run past 6:00 AM local; a missing or unrecognised timezone falls back to IST.
+
+### Fixed
+
+- A reminder added later in the day is now included in that day's email. Previously the morning send marked the whole day done, so anything added afterwards waited until the next day. The function now tracks which reminders it has already mailed and sends only the new ones.
+
 ## [1.4.0] — 2026-09-05
 
 ### Added

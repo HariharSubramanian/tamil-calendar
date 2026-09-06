@@ -28,7 +28,15 @@ Small, mostly non-feature work that should clear before the next release.
 
 **Node 20 → 22** — `functions/package.json` pins `engines` to `"20"`. Node 20 is decommissioned **30 October 2026**, after which functions deploys fail. A one-word change plus a redeploy. Hard deadline.
 
-**CI deploy for Cloud Functions** — GitHub Actions currently deploys Hosting only. Functions are deployed by hand, and `firebase deploy` reads the `functions/` folder on disk rather than the repo, which is how two orphaned functions came to exist (`runDigestNow`, a temporary HTTP trigger, deleted 6 September 2026; `dailyReminderEmails`, above). A CI job deploying from `main` would make the repo the source of truth. Use `--force` only once every deployed function has source in the repo; until then it would delete things without asking. See `functions/README.md`.
+**CI deploy for Cloud Functions — the next major step.** GitHub Actions currently deploys Hosting only. Functions are deployed by hand, and `firebase deploy` reads the `functions/` folder on disk rather than the repo, which is how two orphaned functions came to exist (`runDigestNow`, a temporary HTTP trigger, deleted 6 September 2026; `dailyReminderEmails`, above). The goal is that **no part of the app requires a manual deploy** — merging to `main` ships both Hosting and Functions.
+
+Setup (all one-time):
+
+- A Google Cloud service account with Cloud Functions Admin, Cloud Build Editor, Artifact Registry Administrator, and Service Account User; its JSON key added as a GitHub secret. This is a stronger credential than the existing Hosting one (`firebase-adminsdk-fbsvc`), in a public repo — worth being deliberate about.
+- A second job in `deploy.yml` with a `paths: functions/**` filter, kept separate from the Hosting job so one failing does not block the other.
+- Decide on `--force` (prunes deployed functions with no local source) — safe only once every live function has source in the repo, which is true after `dailyReminderEmails` is deleted.
+
+Sequencing: do this **after** the Node 20 → 22 bump and the v1.4.1 digest change have both shipped manually, so the first automated run happens against a codebase already known to deploy cleanly. See `functions/README.md`.
 
 **User profile backfill** — only 2 of 7 users have `notifyByEmail` set. The rest need to open the app once for their profile document to be written.
 
@@ -36,15 +44,17 @@ Small, mostly non-feature work that should clear before the next release.
 
 ---
 
-## v1.4.1 — email polish and per-reminder opt-out
+## v1.4.1 — timezone fix, email polish, per-reminder opt-out
 
 Closes gaps in what v1.4.0 shipped.
+
+**Per-user timezone and same-day reminders.** *(done — `functions/index.js`, pending deploy)* The digest ran at a fixed 06:00 IST and ignored the `timezone` already stored on each profile, and a reminder added after the morning send waited until the next day. The scheduled function now runs hourly, resolves "today" and "06:00" in each user's own zone (IST fallback), and records which reminder IDs it has mailed each day so a later run sends only what is new. See `functions/README.md`.
 
 **Per-reminder email opt-in/opt-out.** The account-level `notifyByEmail` flag stays as the outer gate; a per-reminder flag filters within the digest. Four pieces:
 
 - A boolean on each reminder document. Absent must mean *included* (`!== false`, not `=== true`) so existing reminders need no migration.
 - A toggle in `AddReminder.jsx` on create and edit, plus a quick action on the reminders list.
-- One filter in `sendDigests()`. If every reminder for the day is silenced, skip the user **without** stamping `lastNotifiedDate` — otherwise a later legitimate send that day is blocked.
+- One filter in `sendDigests()`, applied where today's reminders are read. Silenced reminders are simply left out of the candidate set; with the v1.4.1 `lastNotified.sentIds` model there is no separate "skip without stamping" case to get wrong, because IDs are only recorded once actually mailed.
 - Settings shows which reminders are currently silenced.
 
 **Email polish.** Add a greeting and a link back to the app. Suppress the auto-generated `alertMessage` when it merely repeats the label.

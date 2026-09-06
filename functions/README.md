@@ -5,7 +5,8 @@ opted-in user a single summary of the reminders that fall on the current day.
 
 - **Runtime:** Node 20 (`package.json` → `engines.node`), `firebase-functions` v2
 - **Region:** `asia-south1`
-- **Schedule:** `0 6 * * *` in `Asia/Kolkata` — 06:00 IST daily
+- **Schedule:** `0 * * * *` — top of every hour. Each user is mailed on the
+  first run at or after 06:00 **in their own stored timezone**; see below.
 - **Trigger type:** `onSchedule` (2nd gen) — a Cloud Scheduler job invokes the
   function over HTTP (`https://asia-south1-<project>.cloudfunctions.net/dailyDigest`)
 
@@ -13,26 +14,30 @@ opted-in user a single summary of the reminders that fall on the current day.
 
 ## How a run works
 
-`sendDigests()`:
+The function runs every hour. `sendDigests()`:
 
-1. **Resolve "today"** as `YYYY-MM-DD` in `Asia/Kolkata`, using
-   `Intl.DateTimeFormat("en-CA", …)` (that locale formats exactly as
-   `YYYY-MM-DD`, matching the strings stored in `occurrences`).
-   *Why not UTC:* at 06:00 IST the UTC date is still the previous day, so a UTC
-   lookup would match the wrong reminders.
-2. **Query users** where `notifyByEmail == true`.
-3. **For each user**, in a plain loop:
+1. **Query users** where `notifyByEmail == true`.
+2. **For each user**, in a plain loop:
    - skip if the profile has no `email`;
-   - skip if `lastNotifiedDate` already equals today (idempotency — see below);
+   - **resolve "today" and the current hour in that user's `timezone`**
+     (`users/{uid}.timezone`), using `Intl.DateTimeFormat` with `en-CA` for the
+     date and `en-GB` + `hourCycle: "h23"` for the hour. A missing or
+     unparseable zone falls back to `Asia/Kolkata`;
+   - **skip if it is not yet 06:00** where that user is — a later hourly run
+     picks them up;
    - query that user's `reminders` subcollection for
-     `occurrences array-contains <today>`;
+     `occurrences array-contains <their-today>`;
    - skip if none match;
-   - build one plain-text + HTML message and `add()` it to the top-level
-     `mail` collection;
-   - **only then** `update({ lastNotifiedDate: today })`.
+   - work out which of today's reminder IDs have **not** already been mailed
+     today (the `lastNotified` guard, below);
+   - skip if none are new;
+   - build one plain-text + HTML message from the new reminders only and
+     `add()` it to the top-level `mail` collection;
+   - **only then** `update({ lastNotified: { date, sentIds } })`.
 
-One email per user, however many reminders they have that day. The subject is the
-single label if there's one reminder, otherwise a count.
+At most one email per user per hour, covering whatever is new since the last
+send that day. In the common case that is a single morning digest. The subject
+is the single label if there's one reminder in that email, otherwise a count.
 
 ### Why a per-user loop instead of a collection-group query
 
@@ -43,12 +48,38 @@ single-field one, so **`firestore.indexes.json` stays empty** and there is no
 index to deploy or keep in sync. User counts are small; this is not a
 performance concern at current scale.
 
-### The `lastNotifiedDate` guard
+Since v1.4.1 the function runs hourly rather than once a day, and past 06:00
+local it runs the `reminders` query for every opted-in user each hour (the old
+code stopped at the `lastNotifiedDate` check before querying). That is roughly
+`users × waking-hours` small single-field reads per day — negligible for a
+handful of users, but if the user base grows this is the first thing to guard
+(e.g. skip the query when `lastNotified.date` is today and nothing on the
+profile signals a new reminder).
 
-Scheduled functions can retry, and a duplicate email is the most visible possible
-failure. `lastNotifiedDate` is written **after** the `mail` document is created,
-so a failure between the two retries cleanly on the next run rather than being
-silently marked done. It is stored per user on `users/{uid}`.
+### The `lastNotified` guard
+
+Scheduled functions can retry, the function now runs 24×/day, and a duplicate
+email is the most visible possible failure. Each user's `users/{uid}` document
+carries:
+
+```
+lastNotified: { date: "2026-09-07", sentIds: ["<reminderId>", …] }
+```
+
+`date` is the user's local ISO day; `sentIds` are the reminder IDs already
+mailed that day. A run mails only today's reminders whose IDs are **not** in
+`sentIds`, then writes back the union. This is what lets a reminder added at
+14:00 still go out that afternoon without re-sending the ones from the morning.
+
+The write happens **after** the `mail` document is created, so a failure between
+the two retries cleanly on the next hourly run rather than being silently marked
+done.
+
+**Legacy shape.** Before v1.4.1 this was a bare string `lastNotifiedDate` under
+an all-or-nothing scheme. The function still reads it: if it equals the user's
+today, every reminder due today is treated as already sent. The first successful
+send after v1.4.1 replaces it with the map above and deletes the string
+(`FieldValue.delete()`).
 
 ### Handoff to email delivery
 
@@ -64,11 +95,17 @@ Occurrence dates are computed in the browser (`src/utils/buildOccurrences.js` �
 persisted on each reminder. The function only does string matching on the
 `occurrences` array, which keeps it free of Panchangam logic.
 
-### Known gap: per-user timezone
+### Per-user timezone (resolved in v1.4.1)
 
-`users/{uid}.timezone` is collected by the client but **not used here** — every
-run resolves "today" in `Asia/Kolkata`. Honouring each user's stored zone (and
-scheduling per-zone, or running hourly and filtering) is future work.
+`users/{uid}.timezone` — collected by the client since v1.4 Phase 1 — is now
+read on every run: the function runs hourly and only mails a user once their own
+local clock has passed 06:00. Users with a missing or unparseable zone fall back
+to `Asia/Kolkata`.
+
+Because the schedule is a plain `0 * * * *`, delivery can land up to roughly an
+hour late, and a little more for zones on a sub-hour offset (India itself is
+UTC+5:30). Acceptable for a daily digest; a per-zone schedule would tighten it
+but needs one Cloud Scheduler job per zone.
 
 ---
 
