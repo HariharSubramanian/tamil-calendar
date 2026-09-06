@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [1.4.0] — 2026-09-05
+
+### Added
+
+- Daily email digest — a single email at 6:00 AM IST listing the reminders that fall that day, sent to users who have email reminders switched on
+- Settings page with an account-level toggle for the daily email
+- Reminders now store their upcoming occurrence dates, so the email knows what's due without recalculating Tamil dates
+
+### Fixed
+
+- The Tamil date cache could return the wrong date for a newly added reminder before it was saved (it was keyed on the reminder's ID, which doesn't exist yet at that point)
+
 ## [1.3.0] — 2026-06-21
 
 ### Changed
