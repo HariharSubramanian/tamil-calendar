@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [Unversioned] — 2026-09-08
+
+### Changed
+
+- Cloud Functions runtime upgraded from Node 20 to Node 22
+
 ## [1.4.1] — 2026-09-06
 
 ### Changed
