@@ -2,7 +2,7 @@
 
 நினைவூட்டல்கள் — a Tamil calendar and reminders PWA.
 
-Last updated: 6 September 2026
+Last updated: 8 September 2026
 
 ---
 
@@ -20,23 +20,26 @@ v1.4.0 was released 5 September 2026 and verified end to end on 6 September: the
 
 ---
 
+## Done since v1.4.1
+
+- **Node 20 → 22 runtime bump.** `functions/package.json` `engines.node` now pins `"22"`. Merged as squash commit `c644797` (PR #10, 8 September 2026) and deployed manually with `firebase deploy --only functions:dailyDigest`. `dailyDigest` is confirmed 2nd gen. This clears the 30 October 2026 Node 20 decommission deadline.
+
+---
+
 ## Immediate items
 
 Small, mostly non-feature work that should clear before the next release.
 
-**Delete `dailyReminderEmails`** — an orphaned scheduled function from July with no source in the repo. Once v1.4 Phase 1 added the fields it queries, it began running in the same 06:00 slot as `dailyDigest`, queuing a second email per reminder. Paused 6 September 2026; deletion pending confirmation of a single clean send. Its source is preserved outside the repo.
-
-**Node 20 → 22** — `functions/package.json` pins `engines` to `"20"`. Node 20 is decommissioned **30 October 2026**, after which functions deploys fail. A one-word change plus a redeploy. Hard deadline.
-
-**CI deploy for Cloud Functions — the next major step.** GitHub Actions currently deploys Hosting only. Functions are deployed by hand, and `firebase deploy` reads the `functions/` folder on disk rather than the repo, which is how two orphaned functions came to exist (`runDigestNow`, a temporary HTTP trigger, deleted 6 September 2026; `dailyReminderEmails`, above). The goal is that **no part of the app requires a manual deploy** — merging to `main` ships both Hosting and Functions.
+**CI deploy for Cloud Functions — the next major step.** GitHub Actions currently deploys Hosting only. Functions are deployed by hand, and `firebase deploy` reads the `functions/` folder on disk rather than the repo, which is how two orphaned functions came to exist (`runDigestNow`, a temporary HTTP trigger, deleted 6 September 2026; `dailyReminderEmails`, now paused — see Optional / whenever). The goal is that **no part of the app requires a manual deploy** — merging to `main` ships both Hosting and Functions.
 
 Setup (all one-time):
 
-- A Google Cloud service account with Cloud Functions Admin, Cloud Build Editor, Artifact Registry Administrator, and Service Account User; its JSON key added as a GitHub secret. This is a stronger credential than the existing Hosting one (`firebase-adminsdk-fbsvc`), in a public repo — worth being deliberate about.
-- A second job in `deploy.yml` with a `paths: functions/**` filter, kept separate from the Hosting job so one failing does not block the other.
-- Decide on `--force` (prunes deployed functions with no local source) — safe only once every live function has source in the repo, which is true after `dailyReminderEmails` is deleted.
+- A Google Cloud service account with eight roles — Cloud Functions Admin, Cloud Run Admin, Cloud Build Editor, Artifact Registry Administrator, Cloud Scheduler Admin, Service Account User, Storage Admin, and Firebase Admin — its JSON key added as a GitHub secret. The set is deliberately generous: the minimal set for a Gen 2 functions deploy is undocumented. This is a stronger credential than the existing Hosting one (`firebase-adminsdk-fbsvc`), in a public repo — worth being deliberate about.
+- A separate workflow file, `.github/workflows/deploy-functions.yml` — **not** a second job in `deploy.yml` — with a `paths: functions/**` filter. Separate so a functions deploy failure can never block the Hosting deploy.
 
-Sequencing: do this **after** the Node 20 → 22 bump and the v1.4.1 digest change have both shipped manually, so the first automated run happens against a codebase already known to deploy cleanly. See `functions/README.md`.
+**Scope decided: `--only functions:dailyDigest`, not `--only functions --force`.** A full `--only functions` aborts with *"Aborting because deletion cannot proceed in non-interactive mode"* while the paused `dailyReminderEmails` orphan still exists, and GitHub Actions is always non-interactive. Tradeoff of naming a single function: a scoped deploy only touches the function it names, so any future second function must be added to the workflow by hand, and the repo is not a full source of truth for the deployed function set until the orphan is deleted.
+
+The Node 20 → 22 bump and the v1.4.1 digest change have both shipped manually, so the first automated run will happen against a codebase already known to deploy cleanly. See `functions/README.md`.
 
 **User profile backfill** — only 2 of 7 users have `notifyByEmail` set. The rest need to open the app once for their profile document to be written.
 
@@ -44,28 +47,51 @@ Sequencing: do this **after** the Node 20 → 22 bump and the v1.4.1 digest chan
 
 ---
 
-## v1.4.1 — timezone fix, email polish, per-reminder opt-out
+## Before going public
+
+From the security review of 7 September 2026. These four must be fixed before public sign-up is enabled. Stated as *what* to fix, not how to exploit — this repository is public.
+
+- **Digest recipient comes from a client-writable source.** `dailyDigest` reads the destination email from the user's Firestore profile document, which the client is allowed to write. It must come from Firebase Auth instead.
+- **Reminder text is not escaped in the email HTML.** User-supplied reminder text is interpolated into the digest HTML without escaping. It must be escaped before it reaches the message body.
+- **Stale `festivals` rule in `firestore.rules`.** A rule grants public read on a `festivals` collection the app no longer uses. Delete the rule.
+- **`mail` collection has no explicit rule.** Client access is refused only by the top-level default-deny. Add an explicit deny rule for `mail` so the intent is on the record.
+
+The review also confirmed two things are already correct: no secrets are committed anywhere in the repository, and cross-user data isolation in `firestore.rules` is sound — a signed-in user cannot read or write another user's documents.
+
+---
+
+## v1.4.1 — timezone fix, email polish
 
 Closes gaps in what v1.4.0 shipped.
 
-**Per-user timezone and same-day reminders.** *(done — `functions/index.js`, pending deploy)* The digest ran at a fixed 06:00 IST and ignored the `timezone` already stored on each profile, and a reminder added after the morning send waited until the next day. The scheduled function now runs hourly, resolves "today" and "06:00" in each user's own zone (IST fallback), and records which reminder IDs it has mailed each day so a later run sends only what is new. See `functions/README.md`.
+**Per-user timezone and same-day reminders.** *(shipped — `functions/index.js`, deployed and live on the `0 * * * *` schedule)* The digest ran at a fixed 06:00 IST and ignored the `timezone` already stored on each profile, and a reminder added after the morning send waited until the next day. The scheduled function now runs hourly, resolves "today" and "06:00" in each user's own zone (IST fallback), and records which reminder IDs it has mailed each day so a later run sends only what is new. See `functions/README.md`.
 
-**Per-reminder email opt-in/opt-out.** The account-level `notifyByEmail` flag stays as the outer gate; a per-reminder flag filters within the digest. Four pieces:
+**Email polish.** Add a greeting and a link back to the app. Suppress the auto-generated `alertMessage` when it merely repeats the label.
+
+---
+
+## v1.5 — per-reminder email opt-in/opt-out
+
+The account-level `notifyByEmail` flag stays as the outer gate; a per-reminder flag filters within the digest. Four pieces:
 
 - A boolean on each reminder document. Absent must mean *included* (`!== false`, not `=== true`) so existing reminders need no migration.
 - A toggle in `AddReminder.jsx` on create and edit, plus a quick action on the reminders list.
 - One filter in `sendDigests()`, applied where today's reminders are read. Silenced reminders are simply left out of the candidate set; with the v1.4.1 `lastNotified.sentIds` model there is no separate "skip without stamping" case to get wrong, because IDs are only recorded once actually mailed.
 - Settings shows which reminders are currently silenced.
 
-**Email polish.** Add a greeting and a link back to the app. Suppress the auto-generated `alertMessage` when it merely repeats the label.
-
-> Ordering note: per-reminder opt-out was originally slated for v1.5. It's small enough to fold into a point release, which frees v1.5 for push notifications — the feature originally named as the headline for "the next version." Change this if you'd rather keep the original numbering.
+Briefly folded into the v1.4.1 scope, then pulled back out into its own release.
 
 ---
 
-## v1.5 — push notifications
+## v1.6 — theme switcher
 
-The original headline goal: make this a real reminder app rather than an email one. Chosen deliberately over festivals, polish and refactoring. Email was built first as the easier path with universal reach, avoiding the iOS requirement that a PWA be installed before it can receive push.
+Light / dark / system.
+
+---
+
+## v1.7 — push notifications via FCM
+
+The original headline goal: make this a real reminder app rather than an email one. Email was built first as the easier path with universal reach, avoiding the iOS requirement that a PWA be installed before it can receive push. Now sequenced behind the v1.5 per-reminder opt-out and the v1.6 theme switcher.
 
 Four pieces were needed. Two are now done:
 
@@ -114,11 +140,19 @@ From the HAR performance analysis of 5 September 2026. The app is healthy; perce
 
 **Firestore long-polling.** A Listen/channel request every ~1.5 s indefinitely, each returning 11 bytes. Background chatter and phone battery cost.
 
-**Dead FCM code.** Ships roughly 20 KB and blocks module execution at startup (see v1.5 above).
+**Dead FCM code.** Ships roughly 20 KB and blocks module execution at startup (see v1.7 above).
 
 **Minor waste.** `icon-192.png` fetched 3–4 times; the Tamil font fetched twice.
 
 **Refactoring.** Split `starDate.js` and its Tamil/Sanskrit maps into separate data, logic and UI modules.
+
+---
+
+## Optional / whenever
+
+No deadline; do them if and when convenient.
+
+**Delete `dailyReminderEmails`** — an orphaned scheduled function from July with no source in the repo. Once v1.4 Phase 1 added the fields it queries, it began running in the same 06:00 slot as `dailyDigest`, queuing a second email per reminder. **Paused 6 September 2026 and left paused for now.** Its source is preserved outside the repo. Deleting it is the one thing that would let the CI functions deploy widen from `--only functions:dailyDigest` to the whole `functions/` folder (see Immediate items), but until then the pause is enough.
 
 ---
 

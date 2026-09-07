@@ -3,7 +3,7 @@
 One scheduled function, `dailyDigest`, in [`index.js`](index.js). It emails each
 opted-in user a single summary of the reminders that fall on the current day.
 
-- **Runtime:** Node 20 (`package.json` → `engines.node`), `firebase-functions` v2
+- **Runtime:** Node 22 (`package.json` → `engines.node`), `firebase-functions` v2
 - **Region:** `asia-south1`
 - **Schedule:** `0 * * * *` — top of every hour. Each user is mailed on the
   first run at or after 06:00 **in their own stored timezone**; see below.
@@ -126,6 +126,12 @@ npm run deploy          # firebase deploy --only functions
 or since-deleted code can be live and stay live, and the deployed set only
 changes when someone runs the command.
 
+In practice, deploy scoped to the one function —
+`firebase deploy --only functions:dailyDigest` — as the Node 22 bump was. The
+bare `--only functions` from `npm run deploy` still works from an interactive
+terminal (it prompts before pruning the `dailyReminderEmails` orphan), but it
+aborts outright anywhere non-interactive.
+
 ### Orphaned functions (no source in this repo)
 
 - **`runDigestNow`** — a temporary HTTP trigger used to test the digest on
@@ -136,26 +142,39 @@ changes when someone runs the command.
   uncommitted working tree. It sat dormant because it queried fields that did not
   exist until v1.4 Phase 1; once those fields shipped it began running in the
   same 06:00 slot as `dailyDigest`, queuing a second email per reminder.
-  **Paused 6 September 2026, deletion pending** confirmation of a clean single
-  send. Its source is kept outside the repo.
+  **Paused 6 September 2026 and left paused for now** — deletion is optional and
+  unscheduled (see `../ROADMAP.md` → Optional / whenever). While it exists, the
+  CI deploy has to stay scoped to `dailyDigest`. Its source is kept outside the
+  repo.
 
 ### Planned fix
 
-A CI job that runs `firebase deploy --only functions` from `main` would make the
-repo the source of truth. `--force` (which prunes deployed functions with no
-local source) should only be used once every live function has source committed
-here — until then it would delete things without prompting.
+A CI job in its own workflow file, `.github/workflows/deploy-functions.yml` —
+**not** a second job in `deploy.yml`, so a functions deploy failure can never
+block the Hosting deploy — with a `paths: functions/**` filter, deploying from
+`main`. **Scope decided: `--only functions:dailyDigest`**, not
+`--only functions --force`. A full `--only functions` aborts with *"Aborting
+because deletion cannot proceed in non-interactive mode"* while the paused
+`dailyReminderEmails` orphan still exists, and GitHub Actions is always
+non-interactive.
+
+Naming a single function has a tradeoff: a scoped deploy only touches the
+function it names, so any future second function must be added to the workflow by
+hand, and this repo is not a full source of truth for the deployed function set
+until the orphan is deleted. Full roadmap context in
+[`../ROADMAP.md`](../ROADMAP.md).
 
 ---
 
 ## Maintenance
 
-### Node 20 → 22 (hard deadline)
+### Node runtime
 
-`engines.node` is pinned to `"20"`. **Node 20 for Cloud Functions is decommissioned
-on 30 October 2026**, after which functions deploys fail. Bump it to `"22"` and
-redeploy. The value must be an exact major version string — a range such as
-`">=20"` is rejected.
+`engines.node` pins `"22"` — bumped from `"20"` in PR #10 (squash commit
+`c644797`, 8 September 2026) and deployed with
+`firebase deploy --only functions:dailyDigest`. This landed ahead of the
+30 October 2026 decommission of Node 20 for Cloud Functions. The value must be an
+exact major version string — a range such as `">=22"` is rejected.
 
 ### Local development
 
