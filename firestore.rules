@@ -5,9 +5,11 @@ service cloud.firestore {
       allow read, write: if request.auth != null
         && request.auth.uid == userId;
     }
-    match /festivals/{festivalId} {
-      allow read: if true;
-      allow write: if false;
+    // The Firebase Trigger Email extension owns this collection; the digest
+    // function writes to it via the Admin SDK, which bypasses rules entirely.
+    // No client should ever read or write it directly.
+    match /mail/{mailId} {
+      allow read, write: if false;
     }
   }
 }
