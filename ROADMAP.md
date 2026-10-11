@@ -2,7 +2,7 @@
 
 நினைவூட்டல்கள் — a Tamil calendar and reminders PWA.
 
-Last updated: 8 September 2026
+Last updated: 11 October 2026
 
 ---
 
@@ -49,12 +49,14 @@ The Node 20 → 22 bump and the v1.4.1 digest change have both shipped manually,
 
 ## Before going public
 
-From the security review of 7 September 2026. These four must be fixed before public sign-up is enabled. Stated as *what* to fix, not how to exploit — this repository is public.
+From the security review of 7 September 2026. These four had to be fixed before public sign-up is enabled. Stated as *what* to fix, not how to exploit — this repository is public.
 
-- **Digest recipient comes from a client-writable source.** `dailyDigest` reads the destination email from the user's Firestore profile document, which the client is allowed to write. It must come from Firebase Auth instead.
-- **Reminder text is not escaped in the email HTML.** User-supplied reminder text is interpolated into the digest HTML without escaping. It must be escaped before it reaches the message body.
-- **Stale `festivals` rule in `firestore.rules`.** A rule grants public read on a `festivals` collection the app no longer uses. Delete the rule.
-- **`mail` collection has no explicit rule.** Client access is refused only by the top-level default-deny. Add an explicit deny rule for `mail` so the intent is on the record.
+- ~~**Digest recipient comes from a client-writable source.**~~ `dailyDigest` now reads the destination email from Firebase Auth (`admin.auth().getUser(uid)`) instead of the client-writable `users/{uid}.email` field.
+- ~~**Reminder text is not escaped in the email HTML.**~~ `label`, `tamilMonth`/`tamilStar`, and `alertMessage` are now HTML-escaped before reaching the digest's message body; the subject line also strips CR/LF to close the related SMTP header-injection path.
+- ~~**Stale `festivals` rule in `firestore.rules`.**~~ Deleted — the app hasn't read that collection since `festivals.js` was removed in v1.1.0.
+- ~~**`mail` collection has no explicit rule.**~~ `firestore.rules` now has an explicit `allow read, write: if false` for `mail`, on the record rather than relying on the implicit default-deny.
+
+**Fixed in code on `fix/pre-public-security`; not yet deployed.** `firestore.rules` and `functions:dailyDigest` both still need a manual `firebase deploy` — see `functions/README.md` for the deployment model.
 
 The review also confirmed two things are already correct: no secrets are committed anywhere in the repository, and cross-user data isolation in `firestore.rules` is sound — a signed-in user cannot read or write another user's documents.
 

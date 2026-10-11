@@ -65,6 +65,20 @@ function hourInZone(timeZone = TIMEZONE) {
   );
 }
 
+// Escapes text before it's interpolated into the HTML email body. Reminder
+// fields (label, tamilMonth, tamilStar, alertMessage) are plain client-writable
+// Firestore strings with no server-side validation against the app's own
+// dropdown lists, so they're treated as untrusted here.
+function escapeHtml(str) {
+  return String(str).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+}
+
 // Plain-text and HTML bodies for one user's digest.
 function buildMessage(displayName, reminders, isoDate) {
   const niceDate = new Date(isoDate).toLocaleDateString("en-IN", {
@@ -97,14 +111,17 @@ function buildMessage(displayName, reminders, isoDate) {
     lines
       .map(
         (l) =>
-          `<li><strong>${l.label}</strong> <span style="color:#666">(${l.detail})</span>${l.note}</li>`,
+          `<li><strong>${escapeHtml(l.label)}</strong> <span style="color:#666">(${escapeHtml(l.detail)})</span>${escapeHtml(l.note)}</li>`,
       )
       .join("") +
     `</ul><p style="color:#999;font-size:12px">— Ninaivootal</p>`;
 
+  // Strip CR/LF from a label before it reaches the subject header — a
+  // reminder label is free text, and an unescaped newline there is a classic
+  // SMTP header-injection vector.
   const subject =
     reminders.length === 1
-      ? `Today: ${lines[0].label}`
+      ? `Today: ${lines[0].label.replace(/[\r\n]+/g, " ")}`
       : `Today: ${reminders.length} reminders`;
 
   return { subject, text, html };
@@ -124,8 +141,26 @@ async function sendDigests() {
 
   for (const userDoc of users.docs) {
     const profile = userDoc.data();
-    if (!profile.email) {
-      logger.warn("User has no email, skipping", { uid: userDoc.id });
+
+    // The send-to address comes from Firebase Auth, not the Firestore
+    // profile — profile.email is a plain client-writable field, so trusting
+    // it would let a user redirect their own digest to any address. A
+    // profile can outlive its Auth record (e.g. the account was deleted), so
+    // a lookup failure is a skip, not a crash.
+    let authEmail;
+    try {
+      authEmail = (await admin.auth().getUser(userDoc.id)).email;
+    } catch (err) {
+      logger.warn("Could not resolve Auth user, skipping", {
+        uid: userDoc.id,
+        err: err.message,
+      });
+      continue;
+    }
+    if (!authEmail) {
+      logger.warn("User has no email on their Auth record, skipping", {
+        uid: userDoc.id,
+      });
       continue;
     }
 
@@ -181,7 +216,7 @@ async function sendDigests() {
 
     // The Trigger Email extension sends whatever lands here.
     await db.collection("mail").add({
-      to: [profile.email],
+      to: [authEmail],
       message: { subject, text, html },
     });
 
