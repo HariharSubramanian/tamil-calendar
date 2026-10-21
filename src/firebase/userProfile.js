@@ -8,7 +8,7 @@
 // under an absent parent. This file creates that parent.
 //
 // The parent stores what Phase 2's scheduled function needs:
-//   email         — where the daily digest is sent
+//   email         — copy of the sign-in email, for display; the digest uses Firebase Auth
 //   notifyByEmail — whether the user wants it
 //   timezone      — so "today" resolves in the user's local time, not UTC
 //

@@ -8,13 +8,13 @@ Last updated: 11 October 2026
 
 ## Release history
 
-| Version | What shipped |
-|---|---|
-| v1.0.0 | Initial release. Gregorian + Tamil Panchangam calendar, reminders (date-of-birth and Tamil star), Firebase Auth and Firestore. |
-| v1.1.0 | Edit and delete reminders. Dedicated reminders list, sorted by next occurrence and split into "upcoming this year" / "earlier this year" with day countdowns. "Today" button and click-a-reminder-to-navigate on the calendar. Hardcoded festival calendar (`festivals.js`) removed. |
-| v1.2.0 | Visual redesign. Blue/navy palette derived from the logo icon (sky blue `#3B82C4` primary, deep navy `#1A3A5C` for strong/selected states), replacing the earlier maroon and teal. Loading screens added. |
-| v1.3.0 | Rename to Ninaivootal. PWA manifest corrections, favicon MIME type fix, temporary in-app rename notice. |
-| v1.4.0 | **Daily email digest.** Scheduled Cloud Function at 06:00 IST sends one email per user listing the reminders falling that day. Delivered via the Firebase Trigger Email extension over Brevo SMTP. |
+| Version | What shipped                                                                                                                                                                                                                                                                         |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.0.0  | Initial release. Gregorian + Tamil Panchangam calendar, reminders (date-of-birth and Tamil star), Firebase Auth and Firestore.                                                                                                                                                       |
+| v1.1.0  | Edit and delete reminders. Dedicated reminders list, sorted by next occurrence and split into "upcoming this year" / "earlier this year" with day countdowns. "Today" button and click-a-reminder-to-navigate on the calendar. Hardcoded festival calendar (`festivals.js`) removed. |
+| v1.2.0  | Visual redesign. Blue/navy palette derived from the logo icon (sky blue `#3B82C4` primary, deep navy `#1A3A5C` for strong/selected states), replacing the earlier maroon and teal. Loading screens added.                                                                            |
+| v1.3.0  | Rename to Ninaivootal. PWA manifest corrections, favicon MIME type fix, temporary in-app rename notice.                                                                                                                                                                              |
+| v1.4.0  | **Daily email digest.** Scheduled Cloud Function at 06:00 IST sends one email per user listing the reminders falling that day. Delivered via the Firebase Trigger Email extension over Brevo SMTP.                                                                                   |
 
 v1.4.0 was released 5 September 2026 and verified end to end on 6 September: the scheduled run fired unattended, wrote to the `mail` collection, and the email arrived.
 
@@ -37,7 +37,7 @@ Setup (all one-time):
 - A Google Cloud service account with eight roles — Cloud Functions Admin, Cloud Run Admin, Cloud Build Editor, Artifact Registry Administrator, Cloud Scheduler Admin, Service Account User, Storage Admin, and Firebase Admin — its JSON key added as a GitHub secret. The set is deliberately generous: the minimal set for a Gen 2 functions deploy is undocumented. This is a stronger credential than the existing Hosting one (`firebase-adminsdk-fbsvc`), in a public repo — worth being deliberate about.
 - A separate workflow file, `.github/workflows/deploy-functions.yml` — **not** a second job in `deploy.yml` — with a `paths: functions/**` filter. Separate so a functions deploy failure can never block the Hosting deploy.
 
-**Scope decided: `--only functions:dailyDigest`, not `--only functions --force`.** A full `--only functions` aborts with *"Aborting because deletion cannot proceed in non-interactive mode"* while the paused `dailyReminderEmails` orphan still exists, and GitHub Actions is always non-interactive. Tradeoff of naming a single function: a scoped deploy only touches the function it names, so any future second function must be added to the workflow by hand, and the repo is not a full source of truth for the deployed function set until the orphan is deleted.
+**Scope decided: `--only functions:dailyDigest`, not `--only functions --force`.** A full `--only functions` aborts with _"Aborting because deletion cannot proceed in non-interactive mode"_ while the paused `dailyReminderEmails` orphan still exists, and GitHub Actions is always non-interactive. Tradeoff of naming a single function: a scoped deploy only touches the function it names, so any future second function must be added to the workflow by hand, and the repo is not a full source of truth for the deployed function set until the orphan is deleted.
 
 The Node 20 → 22 bump and the v1.4.1 digest change have both shipped manually, so the first automated run will happen against a codebase already known to deploy cleanly. See `functions/README.md`.
 
@@ -49,14 +49,14 @@ The Node 20 → 22 bump and the v1.4.1 digest change have both shipped manually,
 
 ## Before going public
 
-From the security review of 7 September 2026. These four had to be fixed before public sign-up is enabled. Stated as *what* to fix, not how to exploit — this repository is public.
+From the security review of 7 September 2026. These four had to be fixed before public sign-up is enabled. Stated as _what_ to fix, not how to exploit — this repository is public.
 
 - ~~**Digest recipient comes from a client-writable source.**~~ `dailyDigest` now reads the destination email from Firebase Auth (`admin.auth().getUser(uid)`) instead of the client-writable `users/{uid}.email` field.
 - ~~**Reminder text is not escaped in the email HTML.**~~ `label`, `tamilMonth`/`tamilStar`, and `alertMessage` are now HTML-escaped before reaching the digest's message body; the subject line also strips CR/LF to close the related SMTP header-injection path.
 - ~~**Stale `festivals` rule in `firestore.rules`.**~~ Deleted — the app hasn't read that collection since `festivals.js` was removed in v1.1.0.
 - ~~**`mail` collection has no explicit rule.**~~ `firestore.rules` now has an explicit `allow read, write: if false` for `mail`, on the record rather than relying on the implicit default-deny.
 
-**Fixed in code on `fix/pre-public-security`; not yet deployed.** `firestore.rules` and `functions:dailyDigest` both still need a manual `firebase deploy` — see `functions/README.md` for the deployment model.
+**Fixed in code.** Live only after a manual `firebase deploy --only firestore:rules` and `firebase deploy --only functions:dailyDigest` — CI deploys Hosting only (see `functions/README.md`). The same PR also makes the digest treat every reminder name as text and isolates each user's processing, so one user's malformed data can't stop the run for everyone else.
 
 The review also confirmed two things are already correct: no secrets are committed anywhere in the repository, and cross-user data isolation in `firestore.rules` is sound — a signed-in user cannot read or write another user's documents.
 
@@ -66,7 +66,7 @@ The review also confirmed two things are already correct: no secrets are committ
 
 Closes gaps in what v1.4.0 shipped.
 
-**Per-user timezone and same-day reminders.** *(shipped — `functions/index.js`, deployed and live on the `0 * * * *` schedule)* The digest ran at a fixed 06:00 IST and ignored the `timezone` already stored on each profile, and a reminder added after the morning send waited until the next day. The scheduled function now runs hourly, resolves "today" and "06:00" in each user's own zone (IST fallback), and records which reminder IDs it has mailed each day so a later run sends only what is new. See `functions/README.md`.
+**Per-user timezone and same-day reminders.** (Shipped — `functions/index.js`, deployed and live on the `0 * * * *` schedule.) The digest ran at a fixed 06:00 IST and ignored the `timezone` already stored on each profile, and a reminder added after the morning send waited until the next day. The scheduled function now runs hourly, resolves "today" and "06:00" in each user's own zone (IST fallback), and records which reminder IDs it has mailed each day so a later run sends only what is new. See `functions/README.md`.
 
 **Email polish.** Add a greeting and a link back to the app. Suppress the auto-generated `alertMessage` when it merely repeats the label.
 
@@ -76,7 +76,7 @@ Closes gaps in what v1.4.0 shipped.
 
 The account-level `notifyByEmail` flag stays as the outer gate; a per-reminder flag filters within the digest. Four pieces:
 
-- A boolean on each reminder document. Absent must mean *included* (`!== false`, not `=== true`) so existing reminders need no migration.
+- A boolean on each reminder document. Absent must mean _included_ (`!== false`, not `=== true`) so existing reminders need no migration.
 - A toggle in `AddReminder.jsx` on create and edit, plus a quick action on the reminders list.
 - One filter in `sendDigests()`, applied where today's reminders are read. Silenced reminders are simply left out of the candidate set; with the v1.4.1 `lastNotified.sentIds` model there is no separate "skip without stamping" case to get wrong, because IDs are only recorded once actually mailed.
 - Settings shows which reminders are currently silenced.

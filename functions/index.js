@@ -90,7 +90,7 @@ function buildMessage(displayName, reminders, isoDate) {
   });
 
   const lines = reminders.map((r) => {
-    const label = r.label || "Reminder";
+    const label = String(r.label || "Reminder");
     const detail =
       r.type === "tamil"
         ? `${r.tamilMonth} · ${r.tamilStar}`
@@ -140,96 +140,104 @@ async function sendDigests() {
   let skipped = 0;
 
   for (const userDoc of users.docs) {
-    const profile = userDoc.data();
-
-    // The send-to address comes from Firebase Auth, not the Firestore
-    // profile — profile.email is a plain client-writable field, so trusting
-    // it would let a user redirect their own digest to any address. A
-    // profile can outlive its Auth record (e.g. the account was deleted), so
-    // a lookup failure is a skip, not a crash.
-    let authEmail;
     try {
-      authEmail = (await admin.auth().getUser(userDoc.id)).email;
+      const profile = userDoc.data();
+
+      // The send-to address comes from Firebase Auth, not the Firestore
+      // profile — profile.email is a plain client-writable field, so trusting
+      // it would let a user redirect their own digest to any address. A
+      // profile can outlive its Auth record (e.g. the account was deleted), so
+      // a lookup failure is a skip, not a crash.
+      let authEmail;
+      try {
+        authEmail = (await admin.auth().getUser(userDoc.id)).email;
+      } catch (err) {
+        logger.warn("Could not resolve Auth user, skipping", {
+          uid: userDoc.id,
+          err: err.message,
+        });
+        continue;
+      }
+      if (!authEmail) {
+        logger.warn("User has no email on their Auth record, skipping", {
+          uid: userDoc.id,
+        });
+        continue;
+      }
+
+      // Resolve "today" and the local hour in the user's own zone; fall back to
+      // Asia/Kolkata if the stored zone is missing or rejected by Intl.
+      let isoDate;
+      let localHour;
+      try {
+        isoDate = todayIso(profile.timezone);
+        localHour = hourInZone(profile.timezone);
+      } catch {
+        isoDate = todayIso();
+        localHour = hourInZone();
+      }
+
+      // Too early where this user is — a later hourly run will catch them. A
+      // non-integer hour (an ICU regression, never seen in practice) fails
+      // closed: skip rather than risk mailing at the wrong time of day.
+      if (!Number.isInteger(localHour) || localHour < SEND_HOUR) {
+        skipped++;
+        continue;
+      }
+
+      const reminders = await userDoc.ref
+        .collection("reminders")
+        .where("occurrences", "array-contains", isoDate)
+        .get();
+      if (reminders.empty) continue;
+
+      // Reminder IDs already mailed to this user today. Current shape is
+      // `lastNotified: { date, sentIds }`. The pre-v1.4.1 shape was a bare
+      // `lastNotifiedDate` string with no per-reminder detail — if it is today,
+      // treat every reminder due today as already sent.
+      const ln = profile.lastNotified;
+      let sentIds = [];
+      if (ln && ln.date === isoDate && Array.isArray(ln.sentIds)) {
+        sentIds = ln.sentIds;
+      } else if (!ln && profile.lastNotifiedDate === isoDate) {
+        sentIds = reminders.docs.map((d) => d.id);
+      }
+
+      const fresh = reminders.docs.filter((d) => !sentIds.includes(d.id));
+      if (fresh.length === 0) {
+        skipped++;
+        continue;
+      }
+
+      const { subject, text, html } = buildMessage(
+        profile.displayName,
+        fresh.map((d) => d.data()),
+        isoDate,
+      );
+
+      // The Trigger Email extension sends whatever lands here.
+      await db.collection("mail").add({
+        to: [authEmail],
+        message: { subject, text, html },
+      });
+
+      // Record the union of prior + just-sent IDs, and drop the legacy string.
+      // Written only after the mail write succeeds, so a failure retries next run.
+      await userDoc.ref.update({
+        lastNotified: {
+          date: isoDate,
+          sentIds: sentIds.concat(fresh.map((d) => d.id)),
+        },
+        lastNotifiedDate: FieldValue.delete(),
+      });
+      sent++;
     } catch (err) {
-      logger.warn("Could not resolve Auth user, skipping", {
+      // One user's bad data must not stop everyone else's digest.
+      logger.error("Digest failed for user, continuing", {
         uid: userDoc.id,
         err: err.message,
       });
-      continue;
     }
-    if (!authEmail) {
-      logger.warn("User has no email on their Auth record, skipping", {
-        uid: userDoc.id,
-      });
-      continue;
-    }
-
-    // Resolve "today" and the local hour in the user's own zone; fall back to
-    // Asia/Kolkata if the stored zone is missing or rejected by Intl.
-    let isoDate;
-    let localHour;
-    try {
-      isoDate = todayIso(profile.timezone);
-      localHour = hourInZone(profile.timezone);
-    } catch {
-      isoDate = todayIso();
-      localHour = hourInZone();
-    }
-
-    // Too early where this user is — a later hourly run will catch them. A
-    // non-integer hour (an ICU regression, never seen in practice) fails
-    // closed: skip rather than risk mailing at the wrong time of day.
-    if (!Number.isInteger(localHour) || localHour < SEND_HOUR) {
-      skipped++;
-      continue;
-    }
-
-    const reminders = await userDoc.ref
-      .collection("reminders")
-      .where("occurrences", "array-contains", isoDate)
-      .get();
-    if (reminders.empty) continue;
-
-    // Reminder IDs already mailed to this user today. Current shape is
-    // `lastNotified: { date, sentIds }`. The pre-v1.4.1 shape was a bare
-    // `lastNotifiedDate` string with no per-reminder detail — if it is today,
-    // treat every reminder due today as already sent.
-    const ln = profile.lastNotified;
-    let sentIds = [];
-    if (ln && ln.date === isoDate && Array.isArray(ln.sentIds)) {
-      sentIds = ln.sentIds;
-    } else if (!ln && profile.lastNotifiedDate === isoDate) {
-      sentIds = reminders.docs.map((d) => d.id);
-    }
-
-    const fresh = reminders.docs.filter((d) => !sentIds.includes(d.id));
-    if (fresh.length === 0) {
-      skipped++;
-      continue;
-    }
-
-    const { subject, text, html } = buildMessage(
-      profile.displayName,
-      fresh.map((d) => d.data()),
-      isoDate,
-    );
-
-    // The Trigger Email extension sends whatever lands here.
-    await db.collection("mail").add({
-      to: [authEmail],
-      message: { subject, text, html },
-    });
-
-    // Record the union of prior + just-sent IDs, and drop the legacy string.
-    // Written only after the mail write succeeds, so a failure retries next run.
-    await userDoc.ref.update({
-      lastNotified: {
-        date: isoDate,
-        sentIds: sentIds.concat(fresh.map((d) => d.id)),
-      },
-      lastNotifiedDate: FieldValue.delete(),
-    });
-    sent++;
   }
 
   logger.info("Digest run finished", { users: users.size, sent, skipped });

@@ -32,16 +32,16 @@ falls that day. Built for personal and family use.
 
 ## Stack
 
-| Area | Choice |
-|---|---|
-| UI | React 19, React Router 7 (`BrowserRouter`) |
-| Build | Vite 8, `@vitejs/plugin-react` |
-| Styling | Tailwind CSS 4 (`@tailwindcss/vite`), plus inline styles and a central `src/theme/colors.js` |
-| Icons | `lucide-react` |
-| Panchangam | `@ishubhamx/panchangam-js` (Sankranti + sunrise nakshatra, anchored to Chennai) |
-| Backend | Firebase — Auth (Google), Cloud Firestore, Hosting, Cloud Functions (v2) |
-| Email | Firebase **Trigger Email** extension over Brevo SMTP |
-| Lint | ESLint 10 (flat config); `dist/` and `functions/` are ignored |
+| Area       | Choice                                                                                       |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| UI         | React 19, React Router 7 (`BrowserRouter`)                                                   |
+| Build      | Vite 8, `@vitejs/plugin-react`                                                               |
+| Styling    | Tailwind CSS 4 (`@tailwindcss/vite`), plus inline styles and a central `src/theme/colors.js` |
+| Icons      | `lucide-react`                                                                               |
+| Panchangam | `@ishubhamx/panchangam-js` (Sankranti + sunrise nakshatra, anchored to Chennai)              |
+| Backend    | Firebase — Auth (Google), Cloud Firestore, Hosting, Cloud Functions (v2)                     |
+| Email      | Firebase **Trigger Email** extension over Brevo SMTP                                         |
+| Lint       | ESLint 10 (flat config); `dist/` and `functions/` are ignored                                |
 
 No test runner is configured yet.
 
@@ -71,7 +71,7 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 ```
 
-Values come from the Firebase console (Project settings → General → *Your apps* →
+Values come from the Firebase console (Project settings → General → _Your apps_ →
 SDK setup and configuration). These six are also stored as GitHub Actions secrets
 of the same names, used by the deploy workflow.
 
@@ -100,14 +100,14 @@ npm run dev
 All app routes are defined in `src/main.jsx`. Everything except `/` is behind a
 `PrivateRoute` that redirects to `/` when signed out.
 
-| Path | Page | Notes |
-|---|---|---|
-| `/` | `LoginPage` | Bilingual landing + Google sign-in. Redirects to `/calendar` when already signed in. |
-| `/calendar` | `CalendarPage` | Reminders-only month calendar. |
-| `/reminders/add` | `AddReminder` | Add a reminder. `?edit=<id>` reuses the same form to edit. |
-| `/reminders/list` | `RemindersList` | All reminders, sorted by next occurrence. |
-| `/settings` | `Settings` | Account-level email toggle. |
-| `*` | — | Redirects to `/`. |
+| Path              | Page            | Notes                                                                                |
+| ----------------- | --------------- | ------------------------------------------------------------------------------------ |
+| `/`               | `LoginPage`     | Bilingual landing + Google sign-in. Redirects to `/calendar` when already signed in. |
+| `/calendar`       | `CalendarPage`  | Reminders-only month calendar.                                                       |
+| `/reminders/add`  | `AddReminder`   | Add a reminder. `?edit=<id>` reuses the same form to edit.                           |
+| `/reminders/list` | `RemindersList` | All reminders, sorted by next occurrence.                                            |
+| `/settings`       | `Settings`      | Account-level email toggle.                                                          |
+| `*`               | —               | Redirects to `/`.                                                                    |
 
 > `src/App.jsx` / `src/App.css` and `src/assets/*.svg` are leftovers from the
 > Vite starter and are not imported anywhere.
@@ -125,29 +125,29 @@ rules.
 Created on first sign-in and refreshed on every load by
 `src/firebase/userProfile.js`.
 
-| Field | Written by | Notes |
-|---|---|---|
-| `email`, `displayName` | client | refreshed from the Google account each load |
-| `notifyByEmail` | client | account-level digest switch; defaults `true`; a returning user's choice is never overwritten |
-| `timezone` | client | detected IANA zone, refreshed each load. **Currently informational** — the digest resolves "today" in a fixed `Asia/Kolkata` (see [functions/README.md](functions/README.md)). |
-| `lastNotifiedDate` | digest function | `YYYY-MM-DD` of the last digest sent; the idempotency guard |
-| `createdAt`, `updatedAt` | client | server timestamps |
+| Field                    | Written by      | Notes                                                                                                                                                                          |
+| ------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `email`, `displayName`   | client          | refreshed from the Google account each load; display only — the digest reads the address from Firebase Auth                                                                    |
+| `notifyByEmail`          | client          | account-level digest switch; defaults `true`; a returning user's choice is never overwritten                                                                                   |
+| `timezone`               | client          | detected IANA zone, refreshed each load. **Currently informational** — the digest resolves "today" in a fixed `Asia/Kolkata` (see [functions/README.md](functions/README.md)). |
+| `lastNotifiedDate`       | digest function | `YYYY-MM-DD` of the last digest sent; the idempotency guard                                                                                                                    |
+| `createdAt`, `updatedAt` | client          | server timestamps                                                                                                                                                              |
 
 ### `users/{uid}/reminders/{id}`
 
 Stores the **definition**, not a fixed date, so it recurs yearly forever.
 
-| Field | Applies to | Notes |
-|---|---|---|
-| `type` | all | `"dob"` or `"tamil"` |
-| `label` | all | name shown in lists and the email |
-| `alertMessage` | all | auto-generated from the label if left blank |
-| `occurrences` | all | array of up to 5 upcoming ISO dates, computed in the browser (`src/utils/buildOccurrences.js`) and stored so the digest can query by date |
-| `day`, `month` | `dob` | 1-based; required |
-| `year` | `dob` | optional — drives "age" / "Nth anniversary" |
-| `occasion` | `dob` | `"birthday"` or `"anniversary"` |
-| `tamilMonth`, `tamilStar` | `tamil` | Tamil-script names; resolved via `@ishubhamx/panchangam-js` |
-| `createdAt`, `updatedAt` | all | server timestamps |
+| Field                     | Applies to | Notes                                                                                                                                     |
+| ------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`                    | all        | `"dob"` or `"tamil"`                                                                                                                      |
+| `label`                   | all        | name shown in lists and the email                                                                                                         |
+| `alertMessage`            | all        | auto-generated from the label if left blank                                                                                               |
+| `occurrences`             | all        | array of up to 5 upcoming ISO dates, computed in the browser (`src/utils/buildOccurrences.js`) and stored so the digest can query by date |
+| `day`, `month`            | `dob`      | 1-based; required                                                                                                                         |
+| `year`                    | `dob`      | optional — drives "age" / "Nth anniversary"                                                                                               |
+| `occasion`                | `dob`      | `"birthday"` or `"anniversary"`                                                                                                           |
+| `tamilMonth`, `tamilStar` | `tamil`    | Tamil-script names; resolved via `@ishubhamx/panchangam-js`                                                                               |
+| `createdAt`, `updatedAt`  | all        | server timestamps                                                                                                                         |
 
 ### `mail/{id}` (top level)
 
@@ -160,11 +160,11 @@ There is **no `active` field** anywhere in the model.
 
 ## Deployment model
 
-| What | How |
-|---|---|
-| **Hosting** | GitHub Actions (`.github/workflows/deploy.yml`) on every push to `main`: `npm ci` → `npm run build` → `action-hosting-deploy` to the live channel. Deploys Hosting only. |
-| **Cloud Functions** | Deployed **by hand**: `firebase deploy --only functions` (or `npm run deploy` in `functions/`). Not run by CI. |
-| **Firestore rules / indexes** | Deployed manually with `firebase deploy` when changed. `firestore.indexes.json` is intentionally empty. |
+| What                          | How                                                                                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Hosting**                   | GitHub Actions (`.github/workflows/deploy.yml`) on every push to `main`: `npm ci` → `npm run build` → `action-hosting-deploy` to the live channel. Deploys Hosting only. |
+| **Cloud Functions**           | Deployed **by hand**: `firebase deploy --only functions` (or `npm run deploy` in `functions/`). Not run by CI.                                                           |
+| **Firestore rules / indexes** | Deployed manually with `firebase deploy` when changed. `firestore.indexes.json` is intentionally empty.                                                                  |
 
 `firebase deploy` reads the working directory on disk, not git — so uncommitted
 function code can go live. This has produced orphaned functions with no source in
