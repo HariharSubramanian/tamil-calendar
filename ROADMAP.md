@@ -2,7 +2,7 @@
 
 நினைவூட்டல்கள் — a Tamil calendar and reminders PWA.
 
-Last updated: 11 October 2026
+Last updated: 22 October 2026
 
 ---
 

@@ -129,8 +129,8 @@ Created on first sign-in and refreshed on every load by
 | ------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `email`, `displayName`   | client          | refreshed from the Google account each load; display only — the digest reads the address from Firebase Auth                                                                    |
 | `notifyByEmail`          | client          | account-level digest switch; defaults `true`; a returning user's choice is never overwritten                                                                                   |
-| `timezone`               | client          | detected IANA zone, refreshed each load. **Currently informational** — the digest resolves "today" in a fixed `Asia/Kolkata` (see [functions/README.md](functions/README.md)). |
-| `lastNotifiedDate`       | digest function | `YYYY-MM-DD` of the last digest sent; the idempotency guard                                                                                                                    |
+| `timezone`               | client          | detected IANA zone, refreshed each load. The digest uses it to resolve "today" and the 06:00 send hour, falling back to `Asia/Kolkata` (see [functions/README.md](functions/README.md)). |
+| `lastNotified`           | digest function | `{ date, sentIds }` — the reminder IDs already mailed on the user's local today. The legacy `lastNotifiedDate` string is read once, then deleted                               |
 | `createdAt`, `updatedAt` | client          | server timestamps                                                                                                                                                              |
 
 ### `users/{uid}/reminders/{id}`
