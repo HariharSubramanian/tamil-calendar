@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## [Unversioned] — 2026-10-22
+
+### Security
+
+- The daily email is now sent to the address on the user's Google sign-in (Firebase Auth), not the editable copy stored in their profile
+- Reminder text is HTML-escaped in the daily email, and line breaks are stripped from the subject line
+- Removed an unused public-read `festivals` rule from `firestore.rules`
+- Added an explicit deny rule for the `mail` collection, so no client can read or write it
+
+### Fixed
+
+- One user's malformed reminder or failed read no longer stops the hourly email run for every other user
+
 ## [Unversioned] — 2026-09-08
 
 ### Changed

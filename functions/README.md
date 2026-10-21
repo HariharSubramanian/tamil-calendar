@@ -18,7 +18,9 @@ The function runs every hour. `sendDigests()`:
 
 1. **Query users** where `notifyByEmail == true`.
 2. **For each user**, in a plain loop:
-   - skip if the profile has no `email`;
+   - look up the user's email in **Firebase Auth** (not the profile's
+     client-writable `email` field); skip if the Auth record is missing or
+     has no email;
    - **resolve "today" and the current hour in that user's `timezone`**
      (`users/{uid}.timezone`), using `Intl.DateTimeFormat` with `en-CA` for the
      date and `en-GB` + `hourCycle: "h23"` for the hour. A missing or
@@ -34,6 +36,9 @@ The function runs every hour. `sendDigests()`:
    - build one plain-text + HTML message from the new reminders only and
      `add()` it to the top-level `mail` collection;
    - **only then** `update({ lastNotified: { date, sentIds } })`.
+
+Each user is processed inside its own try/catch — one user's bad data or
+failed read is logged and skipped, and never stops the rest of the run.
 
 At most one email per user per hour, covering whatever is new since the last
 send that day. In the common case that is a single morning digest. The subject
@@ -84,7 +89,9 @@ send after v1.4.1 replaces it with the map above and deletes the string
 ### Handoff to email delivery
 
 Nothing here talks to SMTP. The function only writes
-`{ to: [email], message: { subject, text, html } }` to `mail/{id}`. The Firebase
+`{ to: [authEmail], message: { subject, text, html } }` to `mail/{id}`, where
+`authEmail` comes from Firebase Auth. Reminder text is HTML-escaped before it
+reaches the body, and line breaks are stripped from the subject. The Firebase
 **Trigger Email** extension watches that collection and sends via Brevo SMTP.
 Sender-domain and deliverability work is tracked in [`../ROADMAP.md`](../ROADMAP.md).
 
@@ -153,8 +160,8 @@ A CI job in its own workflow file, `.github/workflows/deploy-functions.yml` —
 **not** a second job in `deploy.yml`, so a functions deploy failure can never
 block the Hosting deploy — with a `paths: functions/**` filter, deploying from
 `main`. **Scope decided: `--only functions:dailyDigest`**, not
-`--only functions --force`. A full `--only functions` aborts with *"Aborting
-because deletion cannot proceed in non-interactive mode"* while the paused
+`--only functions --force`. A full `--only functions` aborts with _"Aborting
+because deletion cannot proceed in non-interactive mode"_ while the paused
 `dailyReminderEmails` orphan still exists, and GitHub Actions is always
 non-interactive.
 
